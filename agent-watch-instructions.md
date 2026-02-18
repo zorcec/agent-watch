@@ -1,3 +1,7 @@
+---
+minWaitTimeMs: 30000
+---
+
 # AgentWatch Instructions
 
 > Define project-specific validation rules below.
@@ -13,12 +17,19 @@
 - [medium] Watch for changes to data validation logic
 
 ## API Contracts
-- [medium] Flag changes to public API endpoints or response shapes
+- [medium] Flag changes to public API endpoints, MCP tools arguments or response shapes
 - [medium] Flag removed or changed error handling in API routes
 
 ## Documentation
-- [low] Note changes to README or documentation files
+- [low] Note questionable changes to README or documentation files
 
 ## Custom Rules
 - [medium] Flag any removed error handlers
+- [medium] Reason if uneeded mocks, or assertions are used in tests
 - [low] Note changes to configuration files
+- [low] Reason if code change might have performance implications or affect reliability
+- [low] Check for if new code adds too much complexity
+
+# Debug
+- [low] unused consts
+

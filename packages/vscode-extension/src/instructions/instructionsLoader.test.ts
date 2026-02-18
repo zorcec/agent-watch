@@ -26,6 +26,7 @@ import {
   loadUserInstructions,
   getUserInstructionsText,
   parseInstructions,
+  extractFrontMatter,
 } from './instructionsLoader';
 import type { UserRule } from './instructionsLoader';
 
@@ -180,6 +181,59 @@ describe('getUserInstructionsText', () => {
   });
 });
 
+describe('extractFrontMatter', () => {
+  it('should return empty config and full body when no front matter', () => {
+    const content = '# Rules\n- [high] A rule';
+    const { body, config } = extractFrontMatter(content);
+    expect(config).toEqual({});
+    expect(body).toBe(content);
+  });
+
+  it('should extract model from front matter', () => {
+    const content = '---\nmodel: claude-3-5-sonnet\n---\n# Rules\n- [high] A rule';
+    const { body, config } = extractFrontMatter(content);
+    expect(config.model).toBe('claude-3-5-sonnet');
+    expect(body).toContain('# Rules');
+    expect(body).not.toContain('---');
+  });
+
+  it('should extract minWaitTimeMs from front matter', () => {
+    const content = '---\nminWaitTimeMs: 15000\n---\n# Rules';
+    const { config } = extractFrontMatter(content);
+    expect(config.minWaitTimeMs).toBe(15000);
+  });
+
+  it('should extract both model and minWaitTimeMs', () => {
+    const content = '---\nmodel: gpt-4o\nminWaitTimeMs: 30000\n---\n- [medium] A rule';
+    const { body, config } = extractFrontMatter(content);
+    expect(config.model).toBe('gpt-4o');
+    expect(config.minWaitTimeMs).toBe(30000);
+    expect(body).toContain('- [medium] A rule');
+  });
+
+  it('should ignore invalid minWaitTimeMs values', () => {
+    const content = '---\nminWaitTimeMs: not-a-number\n---\n# Rules';
+    const { config } = extractFrontMatter(content);
+    expect(config.minWaitTimeMs).toBeUndefined();
+  });
+
+  it('should not parse front matter not at start of file', () => {
+    const content = '# Rules\n---\nmodel: gpt-4o\n---';
+    const { config } = extractFrontMatter(content);
+    expect(config.model).toBeUndefined();
+  });
+});
+
+describe('parseInstructions with front matter input', () => {
+  it('should not include dashes from front matter delimiters as rules', () => {
+    // parseInstructions receives body only (already stripped by extractFrontMatter)
+    const body = '# Rules\n- [high] A real rule';
+    const rules = parseInstructions(body);
+    expect(rules).toHaveLength(1);
+    expect(rules[0].text).toBe('A real rule');
+  });
+});
+
 describe('loadUserInstructions', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -193,6 +247,7 @@ describe('loadUserInstructions', () => {
     const result = await load();
     expect(result.found).toBe(false);
     expect(result.rules).toHaveLength(0);
+    expect(result.config).toEqual({});
   });
 
   it('should return found:false when file read fails', async () => {
@@ -215,6 +270,7 @@ describe('loadUserInstructions', () => {
     const result = await load();
     expect(result.found).toBe(true);
     expect(result.rules).toHaveLength(0);
+    expect(result.config).toEqual({});
   });
 
   it('should parse rules from file content', async () => {
@@ -228,5 +284,19 @@ describe('loadUserInstructions', () => {
     expect(result.found).toBe(true);
     expect(result.rules).toHaveLength(2);
     expect(result.rawContent).toBe(content);
+  });
+
+  it('should parse config from YAML front matter', async () => {
+    const vscode = await import('vscode');
+    (vscode.workspace as any).workspaceFolders = [{ uri: { fsPath: '/workspace' } }];
+    const content = '---\nmodel: claude-3-5-sonnet\nminWaitTimeMs: 20000\n---\n- [high] Auth rule';
+    (vscode.workspace.fs.readFile as any) = vi.fn().mockResolvedValue(Buffer.from(content));
+
+    const { loadUserInstructions: load } = await import('./instructionsLoader');
+    const result = await load();
+    expect(result.found).toBe(true);
+    expect(result.config.model).toBe('claude-3-5-sonnet');
+    expect(result.config.minWaitTimeMs).toBe(20000);
+    expect(result.rules).toHaveLength(1);
   });
 });

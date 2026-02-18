@@ -2,12 +2,17 @@
  * Module: reviewEngine.ts
  *
  * Description:
- *   Core review engine for AgentWatch. Takes a single file's diff and git history,
- *   builds a risk-focused prompt, calls the Copilot LLM via vscode.lm API,
- *   and parses the streaming response into structured ReviewIssue objects.
+ *   Core review engine for AgentWatch. Implements an agentic review loop where
+ *   the LLM can explore the full codebase before producing its final review.
  *
- *   The prompt strategy asks for risk—not summary. The model is instructed to return
- *   only issues a human must verify, using a strict JSON output format with risk tiers.
+ *   Flow:
+ *   1. The agent receives the diff + git history for the changed file.
+ *   2. It can call workspace tools (readFile, searchCode, listDirectory) to gather
+ *      context — follow imports, check callers, inspect related files, etc.
+ *   3. The loop continues until the agent responds with plain JSON (no tool calls),
+ *      or until the safety limit (MAX_AGENT_ITERATIONS) is reached.
+ *
+ *   This enables complex reasoning: the agent is not limited to the diff alone.
  *
  * Usage:
  *   import { reviewFile, reviewFiles } from './reviewEngine';
@@ -15,16 +20,23 @@
  */
 
 import * as vscode from 'vscode';
-import type { ReviewIssue, RiskTier } from './types';
-import { getFileDiff, getRecentHistory } from './gitService';
-import { truncateText } from './utils';
-import { loadUserInstructions, getUserInstructionsText } from './instructionsLoader';
+import type { ReviewIssue, RiskTier } from '../types';
+import { getFileDiff, getRecentHistory } from '../git/gitService';
+import { truncateText } from '../utils';
+import { loadUserInstructions, getUserInstructionsText } from '../instructions/instructionsLoader';
+import { executeToolCall } from './workspaceTools';
 
 /** Maximum diff size in characters to send to the LLM */
 let maxDiffChars = 15_000;
 
 /** Output channel for logging */
 let outputChannel: vscode.OutputChannel | undefined;
+
+/** Model family to use for LLM calls (default: gpt-4o) */
+let modelFamily = 'gpt-4o';
+
+/** Maximum agentic loop iterations before forcing a final response */
+const MAX_AGENT_ITERATIONS = 10;
 
 /**
  * Risk taxonomy included in every review prompt.
@@ -49,6 +61,17 @@ Your job is to identify issues that a HUMAN must verify. You are not writing a s
 
 ${RISK_TAXONOMY}
 
+You have tools to explore the full codebase before finalizing your review:
+- readFile(path): Read the full content of any file in the workspace.
+- searchCode(query, include?): Search for a text/regex pattern across the codebase.
+- listDirectory(path): List files and folders in a directory.
+
+Use tools whenever you need to:
+- Follow an import or dependency to understand context
+- Check all callers of a changed function
+- Verify how a changed type or interface is used elsewhere
+- Inspect related files that may be affected
+
 Rules:
 - Only flag things a human must verify. Do NOT flag style, formatting, comments, or changes you are confident are correct.
 - If you see no issues, return an empty JSON array.
@@ -57,7 +80,8 @@ Rules:
 - Keep titles under 80 characters.
 - Keep explanations under 300 characters.
 
-You MUST respond with ONLY a valid JSON array. No markdown, no code fences, no explanation outside the JSON.
+When you are done exploring and ready to finalize, respond with ONLY a valid JSON array.
+No markdown, no code fences, no explanation outside the JSON.
 
 JSON schema for each element:
 {
@@ -67,6 +91,62 @@ JSON schema for each element:
   "title": "<short title>",
   "explanation": "<detailed explanation>"
 }`;
+
+/**
+ * Tool definitions exposed to the review agent.
+ * The LLM can call these to explore the codebase before producing its final review.
+ */
+const REVIEW_TOOLS: vscode.LanguageModelChatTool[] = [
+  {
+    name: 'readFile',
+    description:
+      'Read the full content of a file in the workspace. Use this to understand code context, follow imports, or verify logic referenced in the diff.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description: 'Relative path to the file from the workspace root (e.g. "src/auth.ts")',
+        },
+      },
+      required: ['path'],
+    },
+  },
+  {
+    name: 'searchCode',
+    description:
+      'Search for a text or regex pattern across the workspace. Use this to find usages of a function, class, or variable referenced in the diff.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Text or regex pattern to search for',
+        },
+        include: {
+          type: 'string',
+          description: 'Optional glob pattern to restrict files, e.g. "**/*.ts"',
+        },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'listDirectory',
+    description:
+      'List files and folders in a directory. Use this to understand project structure or discover related files.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description: 'Relative path to the directory (e.g. "src" or "." for root)',
+        },
+      },
+      required: ['path'],
+    },
+  },
+];
 
 /**
  * Builds the full system prompt by combining internal instructions with
@@ -95,9 +175,11 @@ async function buildSystemPrompt(): Promise<string> {
 export function configure(config: {
   maxDiffChars?: number;
   outputChannel?: vscode.OutputChannel;
+  modelFamily?: string;
 }): void {
   if (config.maxDiffChars !== undefined) maxDiffChars = config.maxDiffChars;
   if (config.outputChannel !== undefined) outputChannel = config.outputChannel;
+  if (config.modelFamily !== undefined) modelFamily = config.modelFamily;
 }
 
 /**
@@ -192,46 +274,98 @@ async function callLLM(
 ): Promise<ReviewIssue[]> {
   const models = await vscode.lm.selectChatModels({
     vendor: 'copilot',
-    family: 'gpt-4.1',
+    family: modelFamily,
   });
 
   if (models.length === 0) {
-    log('[ReviewEngine] No gpt-4.1 model available. Trying any Copilot model...');
+    log(`[ReviewEngine] No '${modelFamily}' model available. Trying any Copilot model...`);
     const fallbackModels = await vscode.lm.selectChatModels({ vendor: 'copilot' });
     if (fallbackModels.length === 0) {
       throw new Error('No Copilot models available. Ensure GitHub Copilot is installed and active.');
     }
-    return await sendToModel(fallbackModels[0], userPrompt, token);
+    log(`[ReviewEngine] Using fallback model: ${fallbackModels[0].family}`);
+    return await runAgentLoop(fallbackModels[0], userPrompt, token);
   }
 
-  return await sendToModel(models[0], userPrompt, token);
+  log(`[ReviewEngine] Using model: ${models[0].family}`);
+  return await runAgentLoop(models[0], userPrompt, token);
 }
 
 /**
- * Sends the prompt to a specific chat model and parses the streamed response.
+ * Runs the agentic review loop: the model explores the codebase via tools,
+ * then finalizes with a JSON response when it has enough context.
+ *
+ * Each iteration:
+ * 1. Send current messages (with tools available) to the model.
+ * 2. Stream the response — collect text parts and tool call parts.
+ * 3. If the model made tool calls: execute them and add results, then loop.
+ * 4. If the model responded with text only: parse JSON and return issues.
  */
-async function sendToModel(
+async function runAgentLoop(
   model: vscode.LanguageModelChat,
   userPrompt: string,
   token?: vscode.CancellationToken,
 ): Promise<ReviewIssue[]> {
   const systemPrompt = await buildSystemPrompt();
-  const messages = [
+  const cancelToken = token ?? new vscode.CancellationTokenSource().token;
+
+  const messages: vscode.LanguageModelChatMessage[] = [
     vscode.LanguageModelChatMessage.User(systemPrompt),
     vscode.LanguageModelChatMessage.User(userPrompt),
   ];
 
-  const cancellationToken = token ?? new vscode.CancellationTokenSource().token;
-  const response = await model.sendRequest(messages, {}, cancellationToken);
+  for (let iteration = 0; iteration < MAX_AGENT_ITERATIONS; iteration++) {
+    if (cancelToken.isCancellationRequested) break;
 
-  let fullText = '';
-  for await (const chunk of response.text) {
-    fullText += chunk;
+    const response = await model.sendRequest(messages, { tools: REVIEW_TOOLS }, cancelToken);
+
+    const textParts: vscode.LanguageModelTextPart[] = [];
+    const toolCallParts: vscode.LanguageModelToolCallPart[] = [];
+
+    for await (const chunk of response.stream) {
+      if (chunk instanceof vscode.LanguageModelTextPart) {
+        textParts.push(chunk);
+      } else if (chunk instanceof vscode.LanguageModelToolCallPart) {
+        toolCallParts.push(chunk);
+      }
+    }
+
+    // No tool calls → model is done exploring, parse the final JSON response
+    if (toolCallParts.length === 0) {
+      const fullText = textParts.map((p) => p.value).join('');
+      log(`[ReviewEngine] Agent done after ${iteration + 1} iteration(s). Response: ${fullText.length} chars`);
+      return parseResponse(fullText);
+    }
+
+    log(
+      `[ReviewEngine] Agent iteration ${iteration + 1}: called ${toolCallParts.length} tool(s): ` +
+      toolCallParts.map((t) => t.name).join(', '),
+    );
+
+    // Add assistant message (text + tool calls) to the conversation
+    messages.push(vscode.LanguageModelChatMessage.Assistant([...textParts, ...toolCallParts]));
+
+    // Execute each tool and add results back as a User message
+    const toolResults: vscode.LanguageModelToolResultPart[] = [];
+    for (const toolCall of toolCallParts) {
+      const input = toolCall.input as Record<string, string>;
+      const result = await executeToolCall(toolCall.name, input);
+      log(`[ReviewEngine] Tool '${toolCall.name}' result: ${result.length} chars`);
+      toolResults.push(
+        new vscode.LanguageModelToolResultPart(toolCall.callId, [
+          new vscode.LanguageModelTextPart(result),
+        ]),
+      );
+    }
+
+    messages.push(vscode.LanguageModelChatMessage.User(toolResults));
   }
 
-  log(`[ReviewEngine] Raw LLM response (${fullText.length} chars)`);
-  return parseResponse(fullText);
+  log('[ReviewEngine] Agent reached max iterations without finalizing. Returning empty.');
+  return [];
 }
+
+
 
 /**
  * Parses the LLM response text into ReviewIssue objects.
@@ -311,4 +445,5 @@ function log(message: string): void {
 export function resetState(): void {
   maxDiffChars = 15_000;
   outputChannel = undefined;
+  modelFamily = 'gpt-4o';
 }

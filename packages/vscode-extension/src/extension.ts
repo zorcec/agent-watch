@@ -13,13 +13,14 @@
 
 import * as vscode from 'vscode';
 import type { ReviewIssue } from './types';
-import * as gitService from './gitService';
-import * as fileWatcher from './fileWatcher';
-import * as reviewEngine from './reviewEngine';
-import * as surfaceManager from './surfaceManager';
-import * as statusBar from './statusBar';
-import * as terminalWatcher from './terminalWatcher';
-import { loadUserInstructions } from './instructionsLoader';
+import * as gitService from './git/gitService';
+import * as fileWatcher from './watchers/fileWatcher';
+import * as reviewEngine from './review/reviewEngine';
+import * as surfaceManager from './ui/surfaceManager';
+import * as statusBar from './ui/statusBar';
+import * as terminalWatcher from './watchers/terminalWatcher';
+import { loadUserInstructions } from './instructions/instructionsLoader';
+import * as reviewQueue from './review/reviewQueue';
 
 /** Output channel for logging */
 let outputChannel: vscode.OutputChannel;
@@ -76,7 +77,7 @@ function registerCommands(context: vscode.ExtensionContext): void {
  * Arms AgentWatch: snapshots baseline, starts file watcher.
  */
 async function arm(): Promise<void> {
-  const rootPath = getWorkspaceRootPath();
+  const rootPath = await resolveWorkspaceRootPath();
   if (!rootPath) {
     vscode.window.showWarningMessage('AgentWatch: No workspace folder open.');
     return;
@@ -98,6 +99,22 @@ async function arm(): Promise<void> {
 
   surfaceManager.clearAll();
   cancelOngoingReview();
+  reviewQueue.resetQueue();
+
+  const instructions = await loadUserInstructions(rootPath);
+  const minWaitTimeMs = instructions.config.minWaitTimeMs ?? 30_000;
+  reviewQueue.configure({ minIntervalMs: minWaitTimeMs });
+  reviewQueue.setOnBatchReady(handleBatchReady);
+  reviewQueue.setOnCountdown((seconds) => statusBar.setCountdown(seconds));
+  reviewQueue.setOnBatchEmpty(() => statusBar.setState('watching'));
+
+  if (instructions.config.minWaitTimeMs !== undefined) {
+    outputChannel.appendLine(`Review queue min wait: ${minWaitTimeMs}ms (from instructions)`);
+  }
+  if (instructions.config.model !== undefined) {
+    reviewEngine.configure({ modelFamily: instructions.config.model });
+    outputChannel.appendLine(`Review model: ${instructions.config.model} (from instructions)`);
+  }
 
   const watchDisposable = fileWatcher.startWatching(
     handleFileReady,
@@ -121,6 +138,7 @@ function disarm(): void {
   currentWatchDisposable?.dispose();
   currentWatchDisposable = undefined;
   cancelOngoingReview();
+  reviewQueue.resetQueue();
   statusBar.setState('idle');
   vscode.window.showInformationMessage('AgentWatch: Disarmed.');
 }
@@ -130,6 +148,7 @@ function disarm(): void {
  */
 function clearReview(): void {
   cancelOngoingReview();
+  reviewQueue.cancelPending();
   surfaceManager.clearAll();
   statusBar.setState('idle');
   outputChannel.appendLine('Review cleared.');
@@ -185,26 +204,42 @@ async function triggerFinalSweep(): Promise<void> {
 
 /**
  * Handles a file that is ready for review (after debounce + git check).
- * Triggers an individual background review for that file.
+ * Adds the file to the review queue; the queue enforces the minimum interval
+ * and filters out diffs that have already been reviewed.
  */
-async function handleFileReady(filePath: string): Promise<void> {
-  outputChannel.appendLine(`File changed: ${filePath}`);
+function handleFileReady(filePath: string): void {
+  outputChannel.appendLine(`File queued for review: ${filePath}`);
+  reviewQueue.enqueueFile(filePath);
+}
+
+/**
+ * Invoked by the review queue when one or more files have new diffs ready.
+ * Reviews each file in sequence and updates the surface and status bar.
+ */
+async function handleBatchReady(filePaths: string[]): Promise<void> {
+  outputChannel.appendLine(
+    `Batch review: ${filePaths.length} file(s) with new diffs — ${filePaths.join(', ')}`,
+  );
   statusBar.setState('reviewing');
+  cancelOngoingReview();
 
   try {
-    const issues = await reviewEngine.reviewFile(filePath);
-    surfaceManager.addFileIssues(filePath, issues);
+    reviewCancellation = new vscode.CancellationTokenSource();
 
-    const totalCount = surfaceManager.getIssueCount();
-    statusBar.setIssueCount(totalCount);
+    for (const filePath of filePaths) {
+      if (reviewCancellation.token.isCancellationRequested) break;
 
-    if (totalCount > 0) {
-      statusBar.setState('issues');
-    } else {
-      statusBar.setState('watching');
+      const issues = await reviewEngine.reviewFile(filePath, reviewCancellation.token);
+      surfaceManager.addFileIssues(filePath, issues);
+
+      const totalCount = surfaceManager.getIssueCount();
+      statusBar.setIssueCount(totalCount);
+      outputChannel.appendLine(`  ${filePath}: ${issues.length} issue(s)`);
     }
+
+    statusBar.setState(surfaceManager.getIssueCount() > 0 ? 'issues' : 'watching');
   } catch (error) {
-    outputChannel.appendLine(`Review error for ${filePath}: ${error}`);
+    outputChannel.appendLine(`Batch review error: ${error}`);
     statusBar.setState('watching');
   }
 }
@@ -254,18 +289,15 @@ function showIssueDetail(issue: ReviewIssue): void {
  * Creates it with a template if it doesn't exist yet.
  */
 async function editInstructions(): Promise<void> {
-  const rootPath = getWorkspaceRootPath();
+  const rootPath = await resolveWorkspaceRootPath();
   if (!rootPath) {
     vscode.window.showWarningMessage('AgentWatch: No workspace folder open.');
     return;
   }
 
-  const folders = vscode.workspace.workspaceFolders;
-  if (!folders) return;
+  const fileUri = vscode.Uri.joinPath(vscode.Uri.file(rootPath), 'agent-watch-instructions.md');
 
-  const fileUri = vscode.Uri.joinPath(folders[0].uri, 'agent-watch-instructions.md');
-
-  const existing = await loadUserInstructions();
+  const existing = await loadUserInstructions(rootPath);
   if (!existing.found) {
     const template = getInstructionsTemplate();
     await vscode.workspace.fs.writeFile(fileUri, Buffer.from(template, 'utf-8'));
@@ -280,7 +312,12 @@ async function editInstructions(): Promise<void> {
  * Returns the template content for a new agent-watch-instructions.md file.
  */
 function getInstructionsTemplate(): string {
-  return `# AgentWatch Instructions
+  return `---
+model: claude-3-5-sonnet
+minWaitTimeMs: 30000
+---
+
+# AgentWatch Instructions
 
 > Define project-specific validation rules below.
 > Each rule is a list item. Optionally prefix with a severity tag: [high], [medium], or [low].
@@ -313,12 +350,45 @@ function cancelOngoingReview(): void {
 }
 
 /**
- * Returns the workspace root path, or undefined if no workspace is open.
+ * Returns the workspace root path for the current session.
+ *
+ * In multi-root workspaces, uses the folder containing the active editor so that
+ * arm() always operates on the project the developer is working in — not blindly
+ * on workspaceFolders[0] which would be the wrong folder in a multi-root setup.
+ *
+ * Resolution order:
+ *   1. Active editor's workspace folder
+ *   2. First workspace folder containing agent-watch-instructions.md
+ *   3. User picks from a QuickPick (if still ambiguous)
  */
-function getWorkspaceRootPath(): string | undefined {
+async function resolveWorkspaceRootPath(): Promise<string | undefined> {
   const folders = vscode.workspace.workspaceFolders;
   if (!folders || folders.length === 0) return undefined;
-  return folders[0].uri.fsPath;
+  if (folders.length === 1) return folders[0].uri.fsPath;
+
+  // Priority 1: active editor's folder
+  const activeEditorFolder = vscode.window.activeTextEditor
+    ? vscode.workspace.getWorkspaceFolder(vscode.window.activeTextEditor.document.uri)
+    : undefined;
+  if (activeEditorFolder) return activeEditorFolder.uri.fsPath;
+
+  // Priority 2: folder containing agent-watch-instructions.md
+  for (const folder of folders) {
+    const instructionsUri = vscode.Uri.joinPath(folder.uri, 'agent-watch-instructions.md');
+    try {
+      await vscode.workspace.fs.stat(instructionsUri);
+      return folder.uri.fsPath;
+    } catch {
+      // file not in this folder, try next
+    }
+  }
+
+  // Priority 3: ask user
+  const picked = await vscode.window.showQuickPick(
+    folders.map((f) => ({ label: f.name, description: f.uri.fsPath, folder: f })),
+    { placeHolder: 'AgentWatch: Choose the workspace folder to watch' },
+  );
+  return picked?.folder.uri.fsPath;
 }
 
 /**

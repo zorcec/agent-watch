@@ -15,7 +15,7 @@
  */
 
 import * as vscode from 'vscode';
-import type { AgentState } from './types';
+import type { AgentState } from '../types';
 
 /** The VS Code status bar item */
 let statusBarItem: vscode.StatusBarItem | undefined;
@@ -28,6 +28,9 @@ let cleanFadeTimer: ReturnType<typeof setTimeout> | undefined;
 
 /** Current issue count */
 let issueCount = 0;
+
+/** Remaining seconds in the pre-review countdown (undefined = not counting down) */
+let countdownSeconds: number | undefined;
 
 /**
  * Creates and shows the status bar item.
@@ -58,6 +61,7 @@ export function getState(): AgentState {
  */
 export function setState(state: AgentState): void {
   currentState = state;
+  countdownSeconds = undefined;
 
   if (cleanFadeTimer) {
     clearTimeout(cleanFadeTimer);
@@ -71,6 +75,18 @@ export function setState(state: AgentState): void {
     }, 5_000);
   }
 
+  updateDisplay();
+}
+
+/**
+ * Shows the countdown (in seconds) to the next review in the status bar.
+ * Only visible while in the 'watching' state.
+ * Pass undefined to clear the countdown.
+ *
+ * @param seconds - Remaining seconds, or undefined to clear
+ */
+export function setCountdown(seconds: number | undefined): void {
+  countdownSeconds = seconds;
   updateDisplay();
 }
 
@@ -102,8 +118,13 @@ function updateDisplay(): void {
       break;
 
     case 'watching':
-      statusBarItem.text = '$(eye) Watching…';
-      statusBarItem.tooltip = 'AgentWatch is armed and monitoring file changes';
+      if (countdownSeconds !== undefined) {
+        statusBarItem.text = `$(clock) Review in ${countdownSeconds}s`;
+        statusBarItem.tooltip = `AgentWatch: changes detected — review starts in ${countdownSeconds}s`;
+      } else {
+        statusBarItem.text = '$(eye) Watching…';
+        statusBarItem.tooltip = 'AgentWatch is armed and monitoring file changes';
+      }
       statusBarItem.command = 'agentWatch.disarm';
       statusBarItem.backgroundColor = undefined;
       break;
@@ -141,5 +162,6 @@ export function resetState(): void {
   }
   currentState = 'idle';
   issueCount = 0;
+  countdownSeconds = undefined;
   statusBarItem = undefined;
 }

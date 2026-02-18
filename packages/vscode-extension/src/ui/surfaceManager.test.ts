@@ -76,7 +76,7 @@ import {
   clearAll,
   resetState,
 } from './surfaceManager';
-import type { ReviewIssue } from './types';
+import type { ReviewIssue } from '../types';
 
 const createIssue = (overrides: Partial<ReviewIssue> = {}): ReviewIssue => ({
   tier: 'medium',

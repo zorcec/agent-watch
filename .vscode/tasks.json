@@ -17,6 +17,33 @@
                 "reveal": "silent",
                 "panel": "shared"
             }
+        },
+        {
+            "label": "Package VSIX",
+            "type": "shell",
+            "command": "npm run package",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": ["$tsc"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Install VSIX",
+            "type": "shell",
+            "command": "code --install-extension $(ls packages/vscode-extension/*.vsix | tail -1) && echo 'Reload window to activate the extension (Developer: Reload Window)'",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "dependsOn": ["Package VSIX"],
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
         }
     ]
 }

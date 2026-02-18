@@ -18,8 +18,8 @@
  */
 
 import * as vscode from 'vscode';
-import type { ReviewIssue, RiskTier } from './types';
-import { formatRiskLevel } from './utils';
+import type { ReviewIssue, RiskTier } from '../types';
+import { formatRiskLevel } from '../utils';
 
 /** Current review issues, indexed by file path */
 let issuesByFile = new Map<string, ReviewIssue[]>();

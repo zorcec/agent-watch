@@ -6,6 +6,7 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces",
+    "package": "npm run package --workspace packages/vscode-extension",
     "test": "vitest run --exclude '**/e2e/**'",
     "test:watch": "vitest --exclude '**/e2e/**'",
     "e2e": "npm run build && xvfb-run -a npx playwright test",

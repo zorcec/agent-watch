@@ -1,3 +1,7 @@
+---
+minWaitTimeMs: 5000
+---
+
 # AgentWatch Instructions
 
 > Define project-specific validation rules below.
@@ -5,23 +9,15 @@
 > Rules without a tag default to [medium].
 
 ## Security
-- [high] Flag any changes to authentication or authorization logic
 - [high] Detect hardcoded secrets, API keys, or credentials
 
-## Data Integrity
+## Data and Code Integrity
 - [high] Flag changes to database schema or migration files
-- [medium] Watch for changes to data validation logic
-
-## API Contracts
-- [medium] Flag changes to public API endpoints or response shapes
-- [medium] Flag removed or changed error handling in API routes
+- [medium] Watch for changes on important or public APIs
 
 ## Documentation
-- [low] Note changes to README or documentation files
+- [medium] Note if important changes are not documented in the existing documentation
+- [low] Note if documentation is bloated or contains outdated or irrelevant information
 
 ## Custom Rules
-- [medium] Flag any removed error handlers
 - [low] Note changes to configuration files
-
-## Debuf
-- [high] Unused constants or variables

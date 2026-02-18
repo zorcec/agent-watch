@@ -14,7 +14,7 @@
  */
 
 import * as vscode from 'vscode';
-import type { AgentPattern } from './types';
+import type { AgentPattern } from '../types';
 
 /** Built-in agent detection patterns (matched against command line text) */
 const DEFAULT_PATTERNS: AgentPattern[] = [

@@ -119,6 +119,33 @@ export async function isFileOpen(page: Page, filename: string): Promise<boolean>
 }
 
 /**
+ * Polls the status bar until an item containing `text` is visible, or timeout elapses.
+ * Returns the full text of the matching status bar item, or undefined on timeout.
+ */
+export async function waitForStatusBarText(
+	page: Page,
+	text: string,
+	timeout = 15_000,
+): Promise<string | undefined> {
+	return safePageOp(page, async () => {
+		const deadline = Date.now() + timeout;
+		while (Date.now() < deadline) {
+			const items = page.locator('.statusbar-item');
+			const count = await items.count();
+			for (let i = 0; i < count; i++) {
+				const item = items.nth(i);
+				const label = await item.textContent().catch(() => '');
+				if (label && label.includes(text)) {
+					return label.trim();
+				}
+			}
+			await page.waitForTimeout(250);
+		}
+		return undefined;
+	}, undefined);
+}
+
+/**
  * Gets the content of the currently active editor
  */
 export async function getEditorContent(page: Page): Promise<string> {

@@ -15,10 +15,12 @@
   "scripts": {
     "build": "npm run check-types && esbuild src/extension.ts --bundle --platform=node --format=cjs --external:vscode --outfile=dist/extension.js --sourcemap",
     "check-types": "tsc --noEmit",
+    "package": "npm run build && vsce package --no-dependencies",
     "test": "vitest"
   },
   "devDependencies": {
     "@types/vscode": "^1.103.0",
+    "@vscode/vsce": "^3.0.0",
     "@vitest/coverage-v8": "^3.2.4",
     "esbuild": "^0.19.0"
   },
