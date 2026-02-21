@@ -14,13 +14,16 @@ const extensionOptions = {
 };
 
 const webviewOptions = {
-  entryPoints: ['src/webview/index.ts'],
+  entryPoints: ['src/webview/index.tsx'],
   bundle: true,
   outdir: 'dist/webview',
   format: 'iife',
   platform: 'browser',
   sourcemap: true,
   logLevel: 'info',
+  jsx: 'automatic',
+  define: { 'process.env.NODE_ENV': '"production"' },
+  loader: { '.css': 'css' },
 };
 
 // Build: Extension Host + Webview

@@ -1,0 +1,18 @@
+{
+  "meta": {
+    "title": "Demo Diagramflow",
+    "description": "A simple demo diagramflow with four nodes and basic edges."
+  },
+  "nodes": [
+    {"id": "start", "label": "Start", "shape": "rounded", "color": "green", "notes": "Entry point of the flow.", "x": 100, "y": 100, "width": 100, "height": 50, "pinned": false},
+    {"id": "process", "label": "Process", "shape": "rectangle", "color": "blue", "notes": "Main processing step.", "x": 300, "y": 100, "width": 120, "height": 60, "pinned": false},
+    {"id": "decision", "label": "Decision", "shape": "diamond", "color": "yellow", "notes": "Conditional branch.", "x": 500, "y": 100, "width": 100, "height": 70, "pinned": false},
+    {"id": "end", "label": "End", "shape": "rounded", "color": "red", "notes": "Exit point of the flow.", "x": 700, "y": 100, "width": 100, "height": 50, "pinned": false}
+  ],
+  "edges": [
+    {"id": "e1", "source": "start", "target": "process", "label": "begin", "arrow": "arrow", "style": "solid"},
+    {"id": "e2", "source": "process", "target": "decision", "label": "next", "arrow": "arrow", "style": "solid"},
+    {"id": "e3", "source": "decision", "target": "end", "label": "yes", "arrow": "arrow", "style": "solid"},
+    {"id": "e4", "source": "decision", "target": "process", "label": "no", "arrow": "open", "style": "dashed"}
+  ]
+}

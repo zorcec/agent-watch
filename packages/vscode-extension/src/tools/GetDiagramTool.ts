@@ -25,7 +25,8 @@ export class GetDiagramTool implements vscode.LanguageModelTool<Record<string, n
     }
 
     const compact = {
-      title: doc.meta.title,
+      title: doc.meta?.title ?? '',
+      description: doc.meta?.description,
       nodes: doc.nodes.map((n) => ({
         id: n.id,
         label: n.label,

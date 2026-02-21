@@ -138,5 +138,52 @@ test.describe('Webview Render', () => {
     const paneCount = await editorGroupContainer.count();
     expect(paneCount).toBeGreaterThan(0);
   });
+
+  test('extension host logs no errors about NaN or undefined node dimensions', async ({
+    vscPage,
+  }) => {
+    const extensionErrors: string[] = [];
+
+    // Capture extension-host level console errors surfaced via page console
+    vscPage.page.on('console', (msg) => {
+      if (msg.type() === 'error') {
+        const text = msg.text();
+        // Filter for extension-related rendering errors (NaN in SVG paths/viewBox)
+        if (text.includes('NaN') || text.includes('diagramflow')) {
+          extensionErrors.push(text);
+        }
+      }
+    });
+
+    await vscPage.openFile('simple.diagram');
+    // Wait long enough for the webview to fully initialise and render
+    await vscPage.page.waitForTimeout(5000);
+
+    const tab = vscPage.page.locator('.tab').filter({ hasText: 'simple.diagram' });
+    await expect(tab).toBeVisible({ timeout: 10000 });
+
+    // No extension-host NaN errors should have surfaced
+    expect(extensionErrors).toHaveLength(0);
+  });
+
+  test('diagram file nodes have valid positive dimensions to prevent NaN SVG paths', async ({
+    vscPage,
+  }) => {
+    await vscPage.openFile('simple.diagram');
+    await vscPage.page.waitForTimeout(1000);
+
+    const filePath = path.resolve(__dirname, 'test-project', 'simple.diagram');
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const doc = JSON.parse(content);
+
+    for (const node of doc.nodes) {
+      expect(typeof node.x).toBe('number');
+      expect(typeof node.y).toBe('number');
+      expect(node.width).toBeGreaterThan(0);
+      expect(node.height).toBeGreaterThan(0);
+      expect(Number.isNaN(node.width)).toBe(false);
+      expect(Number.isNaN(node.height)).toBe(false);
+    }
+  });
 });
 

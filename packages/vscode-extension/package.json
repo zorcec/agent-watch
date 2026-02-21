@@ -17,6 +17,8 @@
   },
   "devDependencies": {
     "@dagrejs/dagre": "^1.1.4",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
     "@types/vscode": "^1.103.0",
     "@vitest/coverage-v8": "^3.2.4",
     "@vscode/vsce": "^3.0.0",
@@ -71,14 +73,22 @@
     "languages": [
       {
         "id": "diagram",
-        "extensions": [".diagram"],
-        "aliases": ["Diagram"]
+        "extensions": [
+          ".diagram"
+        ],
+        "aliases": [
+          "Diagram"
+        ]
       }
     ],
     "languageModelTools": [
       {
         "name": "diagramflow_getDiagram",
-        "tags": ["diagram", "diagramflow", "visualization"],
+        "tags": [
+          "diagram",
+          "diagramflow",
+          "visualization"
+        ],
         "toolReferenceName": "getDiagram",
         "displayName": "Get Diagram",
         "modelDescription": "Reads the currently open .diagram file and returns its full JSON representation including all nodes (with id, label, shape, color, position, pinned status), edges (with id, source, target, label, style), and groups. Use this to understand the current state of a diagram before making modifications.",
@@ -92,7 +102,10 @@
       },
       {
         "name": "diagramflow_addNodes",
-        "tags": ["diagram", "diagramflow"],
+        "tags": [
+          "diagram",
+          "diagramflow"
+        ],
         "toolReferenceName": "addNodes",
         "displayName": "Add Diagram Nodes",
         "modelDescription": "Adds one or more nodes to the currently open .diagram file. Each node requires a label and optionally accepts shape, color, and notes. Nodes are auto-positioned by the layout engine. Do NOT specify x, y, or id.",
@@ -101,19 +114,48 @@
         "icon": "$(add)",
         "inputSchema": {
           "type": "object",
-          "required": ["nodes"],
+          "required": [
+            "nodes"
+          ],
           "properties": {
             "nodes": {
               "type": "array",
               "items": {
                 "type": "object",
-                "required": ["label"],
+                "required": [
+                  "label"
+                ],
                 "properties": {
-                  "label": { "type": "string" },
-                  "shape": { "type": "string", "enum": ["rectangle", "rounded", "diamond", "cylinder"] },
-                  "color": { "type": "string", "enum": ["default", "blue", "green", "red", "yellow", "purple", "gray"] },
-                  "notes": { "type": "string" },
-                  "group": { "type": "string" }
+                  "label": {
+                    "type": "string"
+                  },
+                  "shape": {
+                    "type": "string",
+                    "enum": [
+                      "rectangle",
+                      "rounded",
+                      "diamond",
+                      "cylinder"
+                    ]
+                  },
+                  "color": {
+                    "type": "string",
+                    "enum": [
+                      "default",
+                      "blue",
+                      "green",
+                      "red",
+                      "yellow",
+                      "purple",
+                      "gray"
+                    ]
+                  },
+                  "notes": {
+                    "type": "string"
+                  },
+                  "group": {
+                    "type": "string"
+                  }
                 }
               }
             }
@@ -122,7 +164,10 @@
       },
       {
         "name": "diagramflow_removeNodes",
-        "tags": ["diagram", "diagramflow"],
+        "tags": [
+          "diagram",
+          "diagramflow"
+        ],
         "toolReferenceName": "removeNodes",
         "displayName": "Remove Diagram Nodes",
         "modelDescription": "Removes one or more nodes from the currently open .diagram file by their ids. Also removes all connected edges. Use getDiagram first to find node ids.",
@@ -131,15 +176,25 @@
         "icon": "$(trash)",
         "inputSchema": {
           "type": "object",
-          "required": ["nodeIds"],
+          "required": [
+            "nodeIds"
+          ],
           "properties": {
-            "nodeIds": { "type": "array", "items": { "type": "string" } }
+            "nodeIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
           }
         }
       },
       {
         "name": "diagramflow_updateNodes",
-        "tags": ["diagram", "diagramflow"],
+        "tags": [
+          "diagram",
+          "diagramflow"
+        ],
         "toolReferenceName": "updateNodes",
         "displayName": "Update Diagram Nodes",
         "modelDescription": "Updates properties of existing nodes. Each update requires the node id. Updatable: label, shape, color, notes, group. Position changes only apply to unpinned nodes.",
@@ -148,20 +203,51 @@
         "icon": "$(edit)",
         "inputSchema": {
           "type": "object",
-          "required": ["updates"],
+          "required": [
+            "updates"
+          ],
           "properties": {
             "updates": {
               "type": "array",
               "items": {
                 "type": "object",
-                "required": ["id"],
+                "required": [
+                  "id"
+                ],
                 "properties": {
-                  "id": { "type": "string" },
-                  "label": { "type": "string" },
-                  "shape": { "type": "string", "enum": ["rectangle", "rounded", "diamond", "cylinder"] },
-                  "color": { "type": "string", "enum": ["default", "blue", "green", "red", "yellow", "purple", "gray"] },
-                  "notes": { "type": "string" },
-                  "group": { "type": "string" }
+                  "id": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "shape": {
+                    "type": "string",
+                    "enum": [
+                      "rectangle",
+                      "rounded",
+                      "diamond",
+                      "cylinder"
+                    ]
+                  },
+                  "color": {
+                    "type": "string",
+                    "enum": [
+                      "default",
+                      "blue",
+                      "green",
+                      "red",
+                      "yellow",
+                      "purple",
+                      "gray"
+                    ]
+                  },
+                  "notes": {
+                    "type": "string"
+                  },
+                  "group": {
+                    "type": "string"
+                  }
                 }
               }
             }
@@ -170,7 +256,10 @@
       },
       {
         "name": "diagramflow_addEdges",
-        "tags": ["diagram", "diagramflow"],
+        "tags": [
+          "diagram",
+          "diagramflow"
+        ],
         "toolReferenceName": "addEdges",
         "displayName": "Add Diagram Edges",
         "modelDescription": "Adds edges between existing nodes. Each edge requires source and target node ids. Optional: label, style, arrow, animated.",
@@ -179,20 +268,47 @@
         "icon": "$(git-merge)",
         "inputSchema": {
           "type": "object",
-          "required": ["edges"],
+          "required": [
+            "edges"
+          ],
           "properties": {
             "edges": {
               "type": "array",
               "items": {
                 "type": "object",
-                "required": ["source", "target"],
+                "required": [
+                  "source",
+                  "target"
+                ],
                 "properties": {
-                  "source": { "type": "string" },
-                  "target": { "type": "string" },
-                  "label": { "type": "string" },
-                  "style": { "type": "string", "enum": ["solid", "dashed", "dotted"] },
-                  "arrow": { "type": "string", "enum": ["arrow", "open", "none"] },
-                  "animated": { "type": "boolean" }
+                  "source": {
+                    "type": "string"
+                  },
+                  "target": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "style": {
+                    "type": "string",
+                    "enum": [
+                      "solid",
+                      "dashed",
+                      "dotted"
+                    ]
+                  },
+                  "arrow": {
+                    "type": "string",
+                    "enum": [
+                      "arrow",
+                      "open",
+                      "none"
+                    ]
+                  },
+                  "animated": {
+                    "type": "boolean"
+                  }
                 }
               }
             }
@@ -201,7 +317,10 @@
       },
       {
         "name": "diagramflow_removeEdges",
-        "tags": ["diagram", "diagramflow"],
+        "tags": [
+          "diagram",
+          "diagramflow"
+        ],
         "toolReferenceName": "removeEdges",
         "displayName": "Remove Diagram Edges",
         "modelDescription": "Removes edges by their ids. Use getDiagram first to find edge ids.",
@@ -210,15 +329,25 @@
         "icon": "$(trash)",
         "inputSchema": {
           "type": "object",
-          "required": ["edgeIds"],
+          "required": [
+            "edgeIds"
+          ],
           "properties": {
-            "edgeIds": { "type": "array", "items": { "type": "string" } }
+            "edgeIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
           }
         }
       },
       {
         "name": "diagramflow_updateEdges",
-        "tags": ["diagram", "diagramflow"],
+        "tags": [
+          "diagram",
+          "diagramflow"
+        ],
         "toolReferenceName": "updateEdges",
         "displayName": "Update Diagram Edges",
         "modelDescription": "Updates properties of existing edges. Each update requires the edge id. Updatable: label, style, arrow, animated, source, target.",
@@ -227,21 +356,49 @@
         "icon": "$(edit)",
         "inputSchema": {
           "type": "object",
-          "required": ["updates"],
+          "required": [
+            "updates"
+          ],
           "properties": {
             "updates": {
               "type": "array",
               "items": {
                 "type": "object",
-                "required": ["id"],
+                "required": [
+                  "id"
+                ],
                 "properties": {
-                  "id": { "type": "string" },
-                  "label": { "type": "string" },
-                  "style": { "type": "string", "enum": ["solid", "dashed", "dotted"] },
-                  "arrow": { "type": "string", "enum": ["arrow", "open", "none"] },
-                  "animated": { "type": "boolean" },
-                  "source": { "type": "string" },
-                  "target": { "type": "string" }
+                  "id": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "style": {
+                    "type": "string",
+                    "enum": [
+                      "solid",
+                      "dashed",
+                      "dotted"
+                    ]
+                  },
+                  "arrow": {
+                    "type": "string",
+                    "enum": [
+                      "arrow",
+                      "open",
+                      "none"
+                    ]
+                  },
+                  "animated": {
+                    "type": "boolean"
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "target": {
+                    "type": "string"
+                  }
                 }
               }
             }
@@ -249,5 +406,10 @@
         }
       }
     ]
+  },
+  "dependencies": {
+    "@xyflow/react": "^12.10.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
   }
 }

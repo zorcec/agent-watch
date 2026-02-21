@@ -7,6 +7,12 @@ export default defineConfig({
   fullyParallel: true,
   workers: 10,
   reporter: 'line',
+  expect: {
+    toHaveScreenshot: {
+      maxDiffPixels: 500,
+      animations: 'disabled',
+    },
+  },
   use: {
     headless: true,
     trace: 'retain-on-failure',

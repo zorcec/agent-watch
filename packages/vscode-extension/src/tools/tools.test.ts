@@ -138,6 +138,23 @@ describe('GetDiagramTool', () => {
     expect(parsed.nodes[1].shape).toBe('diamond');
     expect(parsed.nodes[1].color).toBe('blue');
   });
+
+  it('does not throw when doc.meta is undefined (corrupted file)', async () => {
+    const docWithoutMeta = { ...makeDoc(), meta: undefined as any };
+    const svc = makeMockDiagramService({
+      parseDocument: vi.fn().mockReturnValue(docWithoutMeta),
+    });
+    const tool = new GetDiagramTool(svc);
+
+    // Must not throw – returns an empty title instead of crashing
+    let result: unknown;
+    await expect(
+      (async () => { result = await tool.invoke({ input: {} } as any, mockToken); })()
+    ).resolves.not.toThrow();
+
+    const parsed = JSON.parse(resultText(result));
+    expect(parsed.title).toBe('');
+  });
 });
 
 describe('AddNodesTool', () => {

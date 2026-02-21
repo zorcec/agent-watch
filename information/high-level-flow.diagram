@@ -1,0 +1,291 @@
+{
+  "meta": {
+    "title": "High-Level Flow Diagram",
+    "created": "2026-02-21",
+    "modified": "2026-02-21T14:00:08.866Z",
+    "description": "React Flow migration and UI/UX overhaul architecture overview"
+  },
+  "nodes": [
+    {
+      "id": "HOYvl0PC",
+      "label": "Extension Host",
+      "x": -16,
+      "y": -192,
+      "width": 200,
+      "height": 48,
+      "shape": "rectangle",
+      "color": "blue",
+      "pinned": true,
+      "notes": "No changes in v3 migration. Owns the .diagram file as single source of truth."
+    },
+    {
+      "id": "dU20kJAe",
+      "label": "DiagramEditorProvider",
+      "x": 720,
+      "y": 192,
+      "width": 180,
+      "height": 48,
+      "shape": "rounded",
+      "color": "blue",
+      "pinned": true,
+      "notes": "CustomTextEditorProvider. Handles all webview messages, writes file via WorkspaceEdit."
+    },
+    {
+      "id": "3p-g07lJ",
+      "label": "DiagramService",
+      "x": 432,
+      "y": 176,
+      "width": 180,
+      "height": 48,
+      "shape": "rounded",
+      "color": "blue",
+      "pinned": true,
+      "notes": "applySemanticOps(), autoLayoutAll(), parseDocument(). Mediates all doc mutations."
+    },
+    {
+      "id": "v0KOh-6p",
+      "label": "LM Tools (×7)",
+      "x": 64,
+      "y": 96,
+      "width": 180,
+      "height": 48,
+      "shape": "rounded",
+      "color": "blue",
+      "pinned": true,
+      "notes": "addNode, addEdge, deleteNodes, deleteEdges, updateNode, layout, export. All fully implemented."
+    },
+    {
+      "id": "gMhO2lGd",
+      "label": "Webview — React + React Flow",
+      "x": 96,
+      "y": 240,
+      "width": 220,
+      "height": 48,
+      "shape": "rectangle",
+      "color": "green",
+      "pinned": true,
+      "notes": "Stateless view. Re-renders from file on every DOCUMENT_UPDATED message."
+    },
+    {
+      "id": "WFo2qCW4",
+      "label": "ReactFlowProvider",
+      "x": 544,
+      "y": 448,
+      "width": 180,
+      "height": 48,
+      "shape": "rounded",
+      "color": "green",
+      "pinned": true,
+      "notes": "Root context provider. Required for useReactFlow() in child components."
+    },
+    {
+      "id": "5wj27ZPn",
+      "label": "App.tsx",
+      "x": 1540,
+      "y": 40,
+      "width": 180,
+      "height": 48,
+      "shape": "rounded",
+      "color": "green",
+      "pinned": false,
+      "notes": "Mounts bridge + graph state. Passes graph and bridge down to CanvasPanel."
+    },
+    {
+      "id": "mBsWzyo4",
+      "label": "useVSCodeBridge & useGraphState",
+      "x": 1840,
+      "y": 40,
+      "width": 180,
+      "height": 48,
+      "shape": "rectangle",
+      "color": "yellow",
+      "pinned": false,
+      "notes": "Bridge: postMessage I/O. GraphState: DiagramDocument <=> ReactFlow sync. Prevents re-render loops."
+    },
+    {
+      "id": "uCRP7vl4",
+      "label": "docToFlow.ts",
+      "x": 2140,
+      "y": 148,
+      "width": 180,
+      "height": 48,
+      "shape": "rectangle",
+      "color": "yellow",
+      "pinned": false,
+      "notes": "Pure converter: DiagramDocument -> { nodes: Node[], edges: Edge[] }. Fully unit tested."
+    },
+    {
+      "id": "06AAl4iP",
+      "label": "CanvasPanel.tsx",
+      "x": 2140,
+      "y": 40,
+      "width": 180,
+      "height": 48,
+      "shape": "rounded",
+      "color": "green",
+      "pinned": false,
+      "notes": "ReactFlow wrapper. Wires all events: onConnect, onNodeDragStop, onNodesDelete, onEdgesDelete."
+    },
+    {
+      "id": "KKTI1TIT",
+      "label": "DiagramNode.tsx",
+      "x": 2440,
+      "y": 40,
+      "width": 180,
+      "height": 48,
+      "shape": "diamond",
+      "color": "green",
+      "pinned": false,
+      "notes": "Custom node: rectangle, rounded, diamond, cylinder. Inline label edit on double-click."
+    },
+    {
+      "id": "KedHskUc",
+      "label": "DiagramEdge.tsx",
+      "x": 2440,
+      "y": 148,
+      "width": 180,
+      "height": 48,
+      "shape": "diamond",
+      "color": "green",
+      "pinned": false,
+      "notes": "Custom edge: solid, dashed, dotted. Arrow types: arrow, open, none. Bezier routing."
+    },
+    {
+      "id": "n4gdRtN2",
+      "label": "Toolbar.tsx",
+      "x": 2440,
+      "y": 364,
+      "width": 180,
+      "height": 48,
+      "shape": "rectangle",
+      "color": "green",
+      "pinned": false,
+      "notes": "Floating top bar: Add Node, Auto Layout, Fit View, Zoom, Export SVG/PNG."
+    },
+    {
+      "id": "TxRycMDM",
+      "label": "canvas.css",
+      "x": 2440,
+      "y": 256,
+      "width": 180,
+      "height": 48,
+      "shape": "rectangle",
+      "color": "gray",
+      "pinned": false,
+      "notes": "VS Code CSS variable overrides for React Flow. 7-color node palette. Dark/light theme support."
+    }
+  ],
+  "edges": [
+    {
+      "id": "9eaeyCs2",
+      "source": "HOYvl0PC",
+      "target": "dU20kJAe",
+      "style": "solid",
+      "arrow": "arrow"
+    },
+    {
+      "id": "LXzxAxx2",
+      "source": "HOYvl0PC",
+      "target": "3p-g07lJ",
+      "style": "solid",
+      "arrow": "arrow"
+    },
+    {
+      "id": "AQ-EMWzn",
+      "source": "HOYvl0PC",
+      "target": "v0KOh-6p",
+      "style": "solid",
+      "arrow": "arrow"
+    },
+    {
+      "id": "lm_uses_svc",
+      "source": "v0KOh-6p",
+      "target": "3p-g07lJ",
+      "label": "semantic ops",
+      "style": "dashed",
+      "arrow": "arrow"
+    },
+    {
+      "id": "svc_patch",
+      "source": "3p-g07lJ",
+      "target": "dU20kJAe",
+      "label": "patch ops",
+      "style": "dashed",
+      "arrow": "arrow"
+    },
+    {
+      "id": "HNAvMECx",
+      "source": "dU20kJAe",
+      "target": "WFo2qCW4",
+      "label": "postMessage / onMessage",
+      "style": "dashed",
+      "arrow": "arrow",
+      "animated": true
+    },
+    {
+      "id": "aUQcxBzO",
+      "source": "WFo2qCW4",
+      "target": "5wj27ZPn",
+      "label": "provides context",
+      "style": "solid",
+      "arrow": "arrow"
+    },
+    {
+      "id": "S_laEKZy",
+      "source": "5wj27ZPn",
+      "target": "mBsWzyo4",
+      "label": "uses",
+      "style": "solid",
+      "arrow": "arrow"
+    },
+    {
+      "id": "CvJePzfW",
+      "source": "mBsWzyo4",
+      "target": "uCRP7vl4",
+      "label": "converts doc",
+      "style": "solid",
+      "arrow": "arrow"
+    },
+    {
+      "id": "dqrtjU0D",
+      "source": "mBsWzyo4",
+      "target": "06AAl4iP",
+      "label": "syncs state",
+      "style": "solid",
+      "arrow": "arrow"
+    },
+    {
+      "id": "eMLGkK9b",
+      "source": "06AAl4iP",
+      "target": "KKTI1TIT",
+      "label": "renders",
+      "style": "solid",
+      "arrow": "arrow"
+    },
+    {
+      "id": "FsKu0Cts",
+      "source": "06AAl4iP",
+      "target": "KedHskUc",
+      "label": "renders",
+      "style": "solid",
+      "arrow": "arrow"
+    },
+    {
+      "id": "KoV5K77s",
+      "source": "06AAl4iP",
+      "target": "n4gdRtN2",
+      "label": "renders",
+      "style": "solid",
+      "arrow": "arrow"
+    },
+    {
+      "id": "e0aU5lps",
+      "source": "06AAl4iP",
+      "target": "TxRycMDM",
+      "label": "styled by",
+      "style": "dotted",
+      "arrow": "none"
+    }
+  ],
+  "groups": []
+}
