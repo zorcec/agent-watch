@@ -69,9 +69,13 @@ export type WebviewMessage =
       };
     }
   | {
-      /** Sort nodes array by spatial position in the given flow direction. */
+      /** Sort nodes array by spatial position in the given flow direction.
+       * When groupId is provided, sorts only children of that group.
+       * When omitted, sorts top-level nodes and the groups array. */
       type: 'SORT_NODES';
       direction: LayoutDirection;
+      /** If set, sort nodes inside this group instead of top-level items. */
+      groupId?: string;
     }
   | {
       type: 'EDGE_RECONNECTED';

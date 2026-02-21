@@ -1,22 +1,22 @@
 import { Panel, useReactFlow } from '@xyflow/react';
+import { useState, useRef, useEffect, type ReactNode } from 'react';
 import type { LayoutDirection } from '../../types/DiagramDocument';
 
 type ToolbarProps = {
   onAddNode: () => void;
   onAddNote: () => void;
   onAddGroup: () => void;
-  onAutoLayout: () => void;
-  onAutoLayoutForce: () => void;
-  onSortNodes: () => void;
+  onSortNodes: (direction: LayoutDirection) => void;
   onExportSvg: () => void;
   onExportPng: () => void;
-  onOpenSvg: () => void;
+  onExportMermaid: () => void;
   onUndo: () => void;
   onRedo: () => void;
   onToggleSearch: () => void;
   onToggleShortcuts: () => void;
   layoutDirection: LayoutDirection;
   onSetLayoutDirection: (dir: LayoutDirection) => void;
+  selectedGroupId: string | null;
 };
 
 const DIRECTION_LABEL: Record<LayoutDirection, string> = {
@@ -26,6 +26,13 @@ const DIRECTION_LABEL: Record<LayoutDirection, string> = {
   RL: '↔ RL',
 };
 
+const DIRECTION_SHORT: Record<LayoutDirection, string> = {
+  TB: 'TB',
+  LR: 'LR',
+  BT: 'BT',
+  RL: 'RL',
+};
+
 const DIRECTION_CYCLE: Record<LayoutDirection, LayoutDirection> = {
   TB: 'LR',
   LR: 'BT',
@@ -33,106 +40,213 @@ const DIRECTION_CYCLE: Record<LayoutDirection, LayoutDirection> = {
   RL: 'TB',
 };
 
+const ALL_DIRECTIONS: LayoutDirection[] = ['TB', 'LR', 'BT', 'RL'];
+
+type ToolSectionProps = {
+  label: string;
+  children: ReactNode;
+};
+
+function ToolSection({ label, children }: ToolSectionProps) {
+  return (
+    <div className="toolbox-section" role="group" aria-label={label}>
+      <span className="toolbox-section-label">{label}</span>
+      <div className="toolbox-section-btns">{children}</div>
+    </div>
+  );
+}
+
+function useDropdown() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [open]);
+
+  return { open, setOpen, ref };
+}
+
 export function Toolbar({
   onAddNode,
   onAddNote,
   onAddGroup,
-  onAutoLayout,
-  onAutoLayoutForce,
   onSortNodes,
   onExportSvg,
   onExportPng,
-  onOpenSvg,
+  onExportMermaid,
   onUndo,
   onRedo,
   onToggleSearch,
   onToggleShortcuts,
   layoutDirection,
   onSetLayoutDirection,
+  selectedGroupId,
 }: ToolbarProps) {
   const { fitView } = useReactFlow();
+  const sortDropdown = useDropdown();
+  const exportDropdown = useDropdown();
 
   const toggleDirection = () => onSetLayoutDirection(DIRECTION_CYCLE[layoutDirection]);
 
-  return (
-    <Panel position="top-center" className="toolbar" data-testid="toolbar">
-      {/* Create */}
-      <div className="toolbar-group">
-        <button onClick={onAddNode} title="Add Node (N)" data-testid="btn-add-node" className="toolbar-btn">
-          + Node
-        </button>
-        <button onClick={onAddNote} title="Add Sticky Note" data-testid="btn-add-note" className="toolbar-btn">
-          📝 Note
-        </button>
-        <button onClick={onAddGroup} title="Add Group (G)" data-testid="btn-add-group" className="toolbar-btn">
-          ⬡ Group
-        </button>
-      </div>
+  const sortLabel = selectedGroupId ? 'Sort In' : 'Sort';
+  const sortTitle = selectedGroupId
+    ? 'Sort nodes inside the selected group by reading order'
+    : 'Sort top-level nodes and groups by reading order';
 
-      <div className="toolbar-separator" />
+  return (
+    <Panel position="top-left" className="toolbox" data-testid="toolbar">
+      {/* Create */}
+      <ToolSection label="Create">
+        <button onClick={onAddNode} title="Add Node (N)" data-testid="btn-add-node" className="toolbox-btn">
+          <span className="toolbox-btn-icon">＋</span>
+          <span className="toolbox-btn-label">Node</span>
+        </button>
+        <button onClick={onAddNote} title="Add Sticky Note" data-testid="btn-add-note" className="toolbox-btn">
+          <span className="toolbox-btn-icon">📝</span>
+          <span className="toolbox-btn-label">Note</span>
+        </button>
+        <button onClick={onAddGroup} title="Add Group (G)" data-testid="btn-add-group" className="toolbox-btn">
+          <span className="toolbox-btn-icon">⬡</span>
+          <span className="toolbox-btn-label">Group</span>
+        </button>
+      </ToolSection>
+
+      <div className="toolbox-divider" />
 
       {/* History */}
-      <div className="toolbar-group">
-        <button onClick={onUndo} title="Undo (Ctrl+Z)" data-testid="btn-undo" className="toolbar-btn">
-          ↩
+      <ToolSection label="History">
+        <button onClick={onUndo} title="Undo (Ctrl+Z)" data-testid="btn-undo" className="toolbox-btn">
+          <span className="toolbox-btn-icon">↩</span>
+          <span className="toolbox-btn-label">Undo</span>
         </button>
-        <button onClick={onRedo} title="Redo (Ctrl+Shift+Z)" data-testid="btn-redo" className="toolbar-btn">
-          ↪
+        <button onClick={onRedo} title="Redo (Ctrl+Shift+Z)" data-testid="btn-redo" className="toolbox-btn">
+          <span className="toolbox-btn-icon">↪</span>
+          <span className="toolbox-btn-label">Redo</span>
         </button>
-      </div>
+      </ToolSection>
 
-      <div className="toolbar-separator" />
+      <div className="toolbox-divider" />
 
       {/* Arrange */}
-      <div className="toolbar-group">
+      <ToolSection label="Arrange">
         <button
           onClick={toggleDirection}
-          title={`Layout direction: ${layoutDirection} (click to cycle TB → LR → BT → RL)`}
+          title={`Layout direction: ${layoutDirection} — click to cycle TB → LR → BT → RL`}
           data-testid="btn-layout-direction"
-          className="toolbar-btn toolbar-btn--direction"
+          className="toolbox-btn toolbox-btn--direction"
         >
-          {DIRECTION_LABEL[layoutDirection]}
+          <span className="toolbox-btn-icon">{DIRECTION_LABEL[layoutDirection]}</span>
+          <span className="toolbox-btn-label">Direction</span>
         </button>
-        <button onClick={onAutoLayout} title="Auto Layout — repositions unpinned nodes (L)" data-testid="btn-layout" className="toolbar-btn">
-          ⬡ Layout
-        </button>
-        <button onClick={onAutoLayoutForce} title="Force Layout — repositions ALL nodes including pinned (Shift+L)" data-testid="btn-layout-force" className="toolbar-btn">
-          ⬡! Force
-        </button>
-        <button onClick={onSortNodes} title="Sort nodes by position in reading order" data-testid="btn-sort-nodes" className="toolbar-btn">
-          ⇅ Sort
-        </button>
-        <button onClick={() => fitView({ padding: 0.2 })} title="Fit View (F)" data-testid="btn-fit" className="toolbar-btn">
-          ⊞ Fit
-        </button>
-      </div>
 
-      <div className="toolbar-separator" />
+        {/* Sort split-button: main sort + direction dropdown */}
+        <div className="toolbox-split-btn" ref={sortDropdown.ref}>
+          <button
+            onClick={() => onSortNodes(layoutDirection)}
+            title={sortTitle}
+            data-testid="btn-sort-nodes"
+            className="toolbox-btn toolbox-split-btn-main"
+          >
+            <span className="toolbox-btn-icon">⇅</span>
+            <span className="toolbox-btn-label">{sortLabel}</span>
+          </button>
+          <button
+            onClick={() => sortDropdown.setOpen(!sortDropdown.open)}
+            title="Sort direction"
+            data-testid="btn-sort-direction"
+            className="toolbox-split-btn-toggle"
+          >
+            <span className="toolbox-split-btn-dir">{DIRECTION_SHORT[layoutDirection]}</span>
+            <span className="toolbox-split-btn-arrow">▾</span>
+          </button>
+          {sortDropdown.open && (
+            <div className="toolbox-dropdown" data-testid="sort-direction-dropdown">
+              {ALL_DIRECTIONS.map((dir) => (
+                <button
+                  key={dir}
+                  className={`toolbox-dropdown-item ${dir === layoutDirection ? 'toolbox-dropdown-item--active' : ''}`}
+                  onClick={() => {
+                    onSortNodes(dir);
+                    sortDropdown.setOpen(false);
+                  }}
+                >
+                  {DIRECTION_LABEL[dir]}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
-      {/* Import / Export */}
-      <div className="toolbar-group">
-        <button onClick={onOpenSvg} title="Import SVG" data-testid="btn-open" className="toolbar-btn">
-          ↑ SVG
+        <button onClick={() => fitView({ padding: 0.2 })} title="Fit View (F)" data-testid="btn-fit" className="toolbox-btn">
+          <span className="toolbox-btn-icon">⊞</span>
+          <span className="toolbox-btn-label">Fit</span>
         </button>
-        <button onClick={onExportSvg} title="Save as SVG" data-testid="btn-save-svg" className="toolbar-btn">
-          ↓ SVG
-        </button>
-        <button onClick={onExportPng} title="Save as PNG" data-testid="btn-save-png" className="toolbar-btn">
-          ↓ PNG
-        </button>
-      </div>
+      </ToolSection>
 
-      <div className="toolbar-separator" />
+      <div className="toolbox-divider" />
 
-      {/* Utility */}
-      <div className="toolbar-group">
-        <button onClick={onToggleSearch} title="Search nodes (Ctrl+F)" data-testid="btn-search" className="toolbar-btn">
-          🔍
+      {/* Export */}
+      <ToolSection label="Export">
+        <div className="toolbox-split-btn" ref={exportDropdown.ref}>
+          <button
+            onClick={onExportSvg}
+            title="Save as SVG"
+            data-testid="btn-save-svg"
+            className="toolbox-btn toolbox-split-btn-main"
+          >
+            <span className="toolbox-btn-icon">↓</span>
+            <span className="toolbox-btn-label">SVG</span>
+          </button>
+          <button
+            onClick={() => exportDropdown.setOpen(!exportDropdown.open)}
+            title="More export formats"
+            data-testid="btn-export-more"
+            className="toolbox-split-btn-toggle"
+          >
+            <span className="toolbox-split-btn-arrow">▾</span>
+          </button>
+          {exportDropdown.open && (
+            <div className="toolbox-dropdown" data-testid="export-dropdown">
+              <button
+                className="toolbox-dropdown-item"
+                data-testid="btn-save-png"
+                onClick={() => { onExportPng(); exportDropdown.setOpen(false); }}
+              >
+                PNG
+              </button>
+              <button
+                className="toolbox-dropdown-item"
+                data-testid="btn-export-mermaid"
+                onClick={() => { onExportMermaid(); exportDropdown.setOpen(false); }}
+              >
+                Mermaid
+              </button>
+            </div>
+          )}
+        </div>
+      </ToolSection>
+
+      <div className="toolbox-divider" />
+
+      {/* View */}
+      <ToolSection label="View">
+        <button onClick={onToggleSearch} title="Search nodes (Ctrl+F)" data-testid="btn-search" className="toolbox-btn">
+          <span className="toolbox-btn-icon">🔍</span>
+          <span className="toolbox-btn-label">Search</span>
         </button>
-        <button onClick={onToggleShortcuts} title="Keyboard shortcuts (?)" data-testid="btn-shortcuts" className="toolbar-btn">
-          ?
+        <button onClick={onToggleShortcuts} title="Keyboard shortcuts (?)" data-testid="btn-shortcuts" className="toolbox-btn">
+          <span className="toolbox-btn-icon">?</span>
+          <span className="toolbox-btn-label">Keys</span>
         </button>
-      </div>
+      </ToolSection>
     </Panel>
   );
 }

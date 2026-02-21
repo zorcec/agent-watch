@@ -58,9 +58,9 @@ describe('extension', () => {
       expect(registerDiagramTools).toHaveBeenCalledTimes(1);
     });
 
-    it('registers 8 commands', () => {
+    it('registers 9 commands', () => {
       activate(context);
-      expect(vscode.commands.registerCommand).toHaveBeenCalledTimes(8);
+      expect(vscode.commands.registerCommand).toHaveBeenCalledTimes(9);
 
       const commandNames = vi
         .mocked(vscode.commands.registerCommand)
@@ -70,6 +70,7 @@ describe('extension', () => {
       expect(commandNames).toContain('diagramflow.exportMermaid');
       expect(commandNames).toContain('diagramflow.autoLayout');
       expect(commandNames).toContain('diagramflow.autoLayoutForce');
+      expect(commandNames).toContain('diagramflow.sortNodes');
       expect(commandNames).toContain('diagramflow.undo');
       expect(commandNames).toContain('diagramflow.redo');
       expect(commandNames).toContain('diagramflow.importSVG');

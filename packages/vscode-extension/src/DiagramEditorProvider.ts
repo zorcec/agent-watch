@@ -201,7 +201,7 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
 
       case 'SORT_NODES':
         await this.diagramService.applySemanticOps(
-          [{ op: 'sort_nodes', direction: msg.direction }],
+          [{ op: 'sort_nodes', direction: msg.direction, groupId: msg.groupId }],
           document,
         );
         break;

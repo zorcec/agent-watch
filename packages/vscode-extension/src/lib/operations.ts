@@ -8,6 +8,8 @@ import type {
 import {
   DEFAULT_NODE_WIDTH,
   DEFAULT_NODE_HEIGHT,
+  GROUP_PADDING,
+  GROUP_LABEL_HEIGHT,
 } from '../types/DiagramDocument';
 import type { SemanticOp, OpResult } from '../types/operations';
 import { validateDiagram } from './SchemaValidator';
@@ -63,7 +65,7 @@ function applySingleOp(
     case 'update_node':
       return updateNode(doc, op.id, op.changes);
     case 'sort_nodes':
-      return sortNodes(doc, op.direction);
+      return sortNodes(doc, op.direction, op.groupId);
     case 'add_edge':
       return addEdge(doc, op.edge, generateId);
     case 'remove_edge':
@@ -280,6 +282,45 @@ function updateGroup(
 // ---------------------------------------------------------------------------
 
 /**
+ * Sorts groups by their canvas position (using stored x/y or child bounding box).
+ * Pure function — returns a new array without mutating the input.
+ */
+export function sortGroupsByPosition(
+  groups: readonly DiagramGroup[],
+  nodes: readonly DiagramNode[],
+  direction: LayoutDirection,
+): DiagramGroup[] {
+  const sorted = [...groups];
+
+  const getOrigin = (g: DiagramGroup) => {
+    if (g.x !== undefined && g.y !== undefined) return { x: g.x, y: g.y };
+    const children = nodes.filter((n) => n.group === g.id);
+    if (children.length === 0) return { x: 0, y: 0 };
+    return {
+      x: Math.min(...children.map((n) => n.x)) - GROUP_PADDING,
+      y: Math.min(...children.map((n) => n.y)) - GROUP_PADDING - GROUP_LABEL_HEIGHT,
+    };
+  };
+
+  sorted.sort((a, b) => {
+    const oa = getOrigin(a);
+    const ob = getOrigin(b);
+    switch (direction) {
+      case 'TB':
+        return oa.y !== ob.y ? oa.y - ob.y : oa.x - ob.x;
+      case 'BT':
+        return oa.y !== ob.y ? ob.y - oa.y : oa.x - ob.x;
+      case 'LR':
+        return oa.x !== ob.x ? oa.x - ob.x : oa.y - ob.y;
+      case 'RL':
+        return oa.x !== ob.x ? ob.x - oa.x : oa.y - ob.y;
+    }
+  });
+
+  return sorted;
+}
+
+/**
  * Sorts nodes by their canvas position so the array order reflects the visual
  * reading order of the diagram.
  *
@@ -315,8 +356,23 @@ export function sortNodesByPosition(
 function sortNodes(
   doc: DiagramDocument,
   direction: LayoutDirection,
+  groupId?: string,
 ): OpResult {
   const modified = structuredClone(doc);
-  modified.nodes = sortNodesByPosition(modified.nodes, direction);
+
+  if (groupId) {
+    // Sort only nodes inside the specified group; leave other nodes in place.
+    const inside = modified.nodes.filter((n) => n.group === groupId);
+    const outside = modified.nodes.filter((n) => n.group !== groupId);
+    modified.nodes = [...outside, ...sortNodesByPosition(inside, direction)];
+  } else {
+    // Sort top-level (ungrouped) nodes by position; keep grouped nodes in place.
+    // Also sort the groups array itself by position.
+    const topLevel = modified.nodes.filter((n) => !n.group);
+    const grouped = modified.nodes.filter((n) => n.group);
+    modified.nodes = [...sortNodesByPosition(topLevel, direction), ...grouped];
+    modified.groups = sortGroupsByPosition(modified.groups ?? [], modified.nodes, direction);
+  }
+
   return { success: true, document: modified };
 }

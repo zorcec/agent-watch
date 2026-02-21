@@ -32,6 +32,9 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('diagramflow.autoLayoutForce', () => {
       diagramService.autoLayoutForce();
     }),
+    vscode.commands.registerCommand('diagramflow.sortNodes', () => {
+      diagramService.sortNodes();
+    }),
     vscode.commands.registerCommand('diagramflow.undo', () => {
       diagramService.undo();
     }),

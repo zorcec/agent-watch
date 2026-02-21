@@ -55,6 +55,10 @@
         "title": "DiagramFlow: Auto Layout"
       },
       {
+        "command": "diagramflow.sortNodes",
+        "title": "DiagramFlow: Sort Nodes"
+      },
+      {
         "command": "diagramflow.importSVG",
         "title": "DiagramFlow: Import SVG"
       }

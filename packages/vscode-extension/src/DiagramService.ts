@@ -158,6 +158,22 @@ export class DiagramService {
   }
 
   /**
+   * Sorts top-level nodes and groups by their canvas position in the document's
+   * current layout direction. Grouped nodes are not reordered; use groupId for
+   * scoped sorting. Callable from VS Code commands (no webview interaction needed).
+   */
+  async sortNodes(groupId?: string, doc?: vscode.TextDocument): Promise<void> {
+    const target = doc ?? this.activeDocument;
+    if (!target) return;
+
+    const current = this.parseDocument(target);
+    if (!current) return;
+
+    const direction = current.meta.layoutDirection ?? 'TB';
+    await this.applySemanticOps([{ op: 'sort_nodes', direction, groupId }], target);
+  }
+
+  /**
    * Moves multiple nodes to explicit positions in a single write.
    * Used for batch drag of a multi-node selection.
    */

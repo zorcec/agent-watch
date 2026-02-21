@@ -17,6 +17,7 @@ import {
   type DiagramGroupNodeData,
 } from '../lib/docToFlow';
 import { buildExportSvg, rasterizeSvgToPng } from '../lib/exportSvg';
+import { exportToMermaid } from '../../lib/exporters';
 import type {
   DiagramDocument,
   DiagramGroup,
@@ -89,6 +90,7 @@ export type GraphState = {
   onFitViewDone: () => void;
   onExportSvg: () => void;
   onExportPng: () => void;
+  onExportMermaid: () => void;
   onOpenSvg: () => void;
 };
 
@@ -158,7 +160,29 @@ export function useGraphState(
 
   const onNodeDragStop = useCallback(
     (_event: React.MouseEvent, node: Node, nodes: Node[]) => {
-      // When only one node is dragged (or it's a group), use the single-node path.
+      // Helper: find the most up-to-date position of a node by id.
+      // Prefers the drag-event `nodes` array (has current positions) over allNodes (may be stale).
+      const findNodePosition = (id: string): { x: number; y: number } | null => {
+        const fromEvent = nodes.find((n) => n.id === id);
+        if (fromEvent) return fromEvent.position;
+        const fromState = allNodes.find((n) => n.id === id);
+        return fromState ? fromState.position : null;
+      };
+
+      const toAbsolute = (n: Node): { x: number; y: number } => {
+        let absX = Math.round(n.position.x);
+        let absY = Math.round(n.position.y);
+        if (n.parentId) {
+          const parentPos = findNodePosition(n.parentId);
+          if (parentPos) {
+            absX += Math.round(parentPos.x);
+            absY += Math.round(parentPos.y);
+          }
+        }
+        return { x: absX, y: absY };
+      };
+
+      // When only one node is dragged, use the single-node path.
       if (nodes.length <= 1) {
         if (node.type === 'diagramGroup') {
           bridge.postMessage({
@@ -172,16 +196,8 @@ export function useGraphState(
           return;
         }
 
-        let absX = Math.round(node.position.x);
-        let absY = Math.round(node.position.y);
-        if (node.parentId) {
-          const parent = allNodes.find((n) => n.id === node.parentId);
-          if (parent) {
-            absX += Math.round(parent.position.x);
-            absY += Math.round(parent.position.y);
-          }
-        }
-        bridge.postMessage({ type: 'NODE_DRAGGED', id: node.id, position: { x: absX, y: absY } });
+        const pos = toAbsolute(node);
+        bridge.postMessage({ type: 'NODE_DRAGGED', id: node.id, position: pos });
         return;
       }
 
@@ -197,16 +213,7 @@ export function useGraphState(
           });
           continue;
         }
-        let absX = Math.round(n.position.x);
-        let absY = Math.round(n.position.y);
-        if (n.parentId) {
-          const parent = allNodes.find((pn) => pn.id === n.parentId);
-          if (parent) {
-            absX += Math.round(parent.position.x);
-            absY += Math.round(parent.position.y);
-          }
-        }
-        moves.push({ id: n.id, position: { x: absX, y: absY } });
+        moves.push({ id: n.id, position: toAbsolute(n) });
       }
       if (moves.length > 0) {
         bridge.postMessage({ type: 'NODES_DRAGGED', moves });
@@ -347,9 +354,14 @@ export function useGraphState(
 
   const onSortNodes = useCallback(
     (direction: LayoutDirection) => {
-      bridge.postMessage({ type: 'SORT_NODES', direction });
+      bridge.postMessage({
+        type: 'SORT_NODES',
+        direction,
+        // When a group is selected, sort nodes inside it; otherwise sort top-level items.
+        ...(selectedGroupId ? { groupId: selectedGroupId } : {}),
+      });
     },
-    [bridge],
+    [bridge, selectedGroupId],
   );
 
   const onRequestLayout = useCallback(
@@ -426,6 +438,12 @@ export function useGraphState(
     });
   }, [bridge, doc]);
 
+  const onExportMermaid = useCallback(() => {
+    if (!doc) return;
+    const mermaidText = exportToMermaid(doc);
+    bridge.postMessage({ type: 'EXPORT', format: 'mermaid', data: mermaidText });
+  }, [bridge, doc]);
+
   const onOpenSvg = useCallback(() => {
     bridge.postMessage({ type: 'OPEN_SVG_REQUEST' });
   }, [bridge]);
@@ -471,6 +489,7 @@ export function useGraphState(
     onFitViewDone,
     onExportSvg,
     onExportPng,
+    onExportMermaid,
     onOpenSvg,
   };
 }

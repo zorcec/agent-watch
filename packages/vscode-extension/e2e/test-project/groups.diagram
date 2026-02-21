@@ -1,0 +1,76 @@
+{
+  "meta": {
+    "version": "1.0",
+    "title": "Groups Test Diagram",
+    "created": "2025-01-01T00:00:00Z",
+    "modified": "2025-01-01T00:00:00Z"
+  },
+  "nodes": [
+    {
+      "id": "n1",
+      "label": "Alpha",
+      "shape": "rectangle",
+      "color": "blue",
+      "x": 300,
+      "y": 40,
+      "width": 140,
+      "height": 48,
+      "pinned": true
+    },
+    {
+      "id": "n2",
+      "label": "Beta",
+      "shape": "rectangle",
+      "color": "default",
+      "x": 100,
+      "y": 200,
+      "width": 140,
+      "height": 48,
+      "pinned": true,
+      "group": "g1"
+    },
+    {
+      "id": "n3",
+      "label": "Gamma",
+      "shape": "rectangle",
+      "color": "green",
+      "x": 280,
+      "y": 200,
+      "width": 140,
+      "height": 48,
+      "pinned": true,
+      "group": "g1"
+    },
+    {
+      "id": "n4",
+      "label": "Delta",
+      "shape": "rectangle",
+      "color": "red",
+      "x": 500,
+      "y": 200,
+      "width": 140,
+      "height": 48,
+      "pinned": true
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "n1",
+      "target": "n2",
+      "style": "solid",
+      "arrow": "normal",
+      "animated": false
+    }
+  ],
+  "groups": [
+    {
+      "id": "g1",
+      "label": "Services",
+      "color": "blue",
+      "x": 60,
+      "y": 160,
+      "collapsed": false
+    }
+  ]
+}

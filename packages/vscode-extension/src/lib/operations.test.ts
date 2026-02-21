@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { applyOps, createEmptyDocument, sortNodesByPosition } from './operations';
+import { applyOps, createEmptyDocument, sortNodesByPosition, sortGroupsByPosition } from './operations';
 import type { DiagramDocument } from '../types/DiagramDocument';
 import type { SemanticOp } from '../types/operations';
 
@@ -658,5 +658,168 @@ describe('applyOps - sort_nodes', () => {
     const originalOrder = doc.nodes.map((n) => n.id);
     applyOps(doc, [{ op: 'sort_nodes', direction: 'RL' }], mockId);
     expect(doc.nodes.map((n) => n.id)).toEqual(originalOrder);
+  });
+});
+// ---------------------------------------------------------------------------
+// sort_nodes — top-level only (keeps grouped nodes intact)
+// ---------------------------------------------------------------------------
+
+function makeDocWithGroups(): DiagramDocument {
+  return {
+    meta: {
+      title: 'Groups Test',
+      created: '2025-01-01T00:00:00Z',
+      modified: '2025-01-01T00:00:00Z',
+    },
+    nodes: [
+      // Top-level node at x=300 (rightmost)
+      makeNode('top-right', 300, 50),
+      // Grouped node inside g1 — should NOT be touched by top-level sort
+      { ...makeNode('g1-node-b', 200, 200), group: 'g1' },
+      { ...makeNode('g1-node-a', 100, 200), group: 'g1' },
+      // Top-level node at x=50 (leftmost)
+      makeNode('top-left', 50, 50),
+    ],
+    edges: [],
+    groups: [
+      { id: 'g1', label: 'Group One', x: 60, y: 160 },
+      { id: 'g2', label: 'Group Two', x: 400, y: 160 },
+    ],
+  };
+}
+
+describe('applyOps - sort_nodes (top-level only, no groupId)', () => {
+  it('sorts top-level nodes by position (LR) without touching grouped nodes', () => {
+    const doc = makeDocWithGroups();
+    const result = applyOps(doc, [{ op: 'sort_nodes', direction: 'LR' }], mockId);
+    expect(result.success).toBe(true);
+    const after = result.document!;
+
+    // Top-level nodes should be ordered by x: top-left (50) before top-right (300)
+    const topLevel = after.nodes.filter((n) => !n.group);
+    expect(topLevel.map((n) => n.id)).toEqual(['top-left', 'top-right']);
+  });
+
+  it('grouped nodes remain in the nodes array after top-level sort', () => {
+    const doc = makeDocWithGroups();
+    const result = applyOps(doc, [{ op: 'sort_nodes', direction: 'LR' }], mockId);
+    expect(result.success).toBe(true);
+    const groupedIds = result.document!.nodes.filter((n) => n.group).map((n) => n.id);
+    expect(groupedIds).toContain('g1-node-a');
+    expect(groupedIds).toContain('g1-node-b');
+  });
+
+  it('also sorts the groups array by position (LR) during top-level sort', () => {
+    const doc = makeDocWithGroups();
+    // g1 at x=60, g2 at x=400 → LR: g1 before g2 ✓ (already sorted)
+    // Swap group order to verify sort works
+    doc.groups = [
+      { id: 'g2', label: 'Group Two', x: 400, y: 160 },
+      { id: 'g1', label: 'Group One', x: 60, y: 160 },
+    ];
+    const result = applyOps(doc, [{ op: 'sort_nodes', direction: 'LR' }], mockId);
+    expect(result.success).toBe(true);
+    // After sort, g1 (x=60) should come before g2 (x=400)
+    const groupIds = result.document!.groups!.map((g) => g.id);
+    expect(groupIds).toEqual(['g1', 'g2']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// sort_nodes — group-scoped (groupId provided)
+// ---------------------------------------------------------------------------
+
+describe('applyOps - sort_nodes (group-scoped, with groupId)', () => {
+  it('sorts nodes inside the specified group without touching top-level or other groups', () => {
+    const doc = makeDocWithGroups();
+    // g1 nodes: g1-node-b (x=200) and g1-node-a (x=100)
+    // LR sort inside g1 → g1-node-a (x=100) before g1-node-b (x=200)
+    const result = applyOps(doc, [{ op: 'sort_nodes', direction: 'LR', groupId: 'g1' }], mockId);
+    expect(result.success).toBe(true);
+    const after = result.document!;
+
+    const g1Nodes = after.nodes.filter((n) => n.group === 'g1').map((n) => n.id);
+    expect(g1Nodes).toEqual(['g1-node-a', 'g1-node-b']);
+  });
+
+  it('top-level nodes are not affected by group-scoped sort', () => {
+    const doc = makeDocWithGroups();
+    const topBefore = doc.nodes.filter((n) => !n.group).map((n) => n.id);
+    const result = applyOps(doc, [{ op: 'sort_nodes', direction: 'LR', groupId: 'g1' }], mockId);
+    expect(result.success).toBe(true);
+    const topAfter = result.document!.nodes.filter((n) => !n.group).map((n) => n.id);
+    expect(topAfter).toEqual(topBefore);
+  });
+
+  it('groups array is not sorted when groupId is provided', () => {
+    const doc = makeDocWithGroups();
+    // Deliberately put groups out of LR order
+    doc.groups = [
+      { id: 'g2', label: 'Group Two', x: 400, y: 160 },
+      { id: 'g1', label: 'Group One', x: 60, y: 160 },
+    ];
+    const result = applyOps(doc, [{ op: 'sort_nodes', direction: 'LR', groupId: 'g1' }], mockId);
+    expect(result.success).toBe(true);
+    // Groups should remain in original order since we only sorted inside g1
+    const groupIds = result.document!.groups!.map((g) => g.id);
+    expect(groupIds).toEqual(['g2', 'g1']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// sortGroupsByPosition (pure function)
+// ---------------------------------------------------------------------------
+
+describe('sortGroupsByPosition', () => {
+  const nodes = [
+    makeNode('n1', 100, 100),
+    makeNode('n2', 400, 100),
+  ];
+
+  it('sorts groups by stored x/y position (LR)', () => {
+    const groups = [
+      { id: 'g2', label: 'B', x: 400, y: 100 },
+      { id: 'g1', label: 'A', x: 50, y: 100 },
+    ];
+    const sorted = sortGroupsByPosition(groups, nodes, 'LR');
+    expect(sorted.map((g) => g.id)).toEqual(['g1', 'g2']);
+  });
+
+  it('sorts groups by stored x/y position (RL)', () => {
+    const groups = [
+      { id: 'g1', label: 'A', x: 50, y: 100 },
+      { id: 'g2', label: 'B', x: 400, y: 100 },
+    ];
+    const sorted = sortGroupsByPosition(groups, nodes, 'RL');
+    expect(sorted.map((g) => g.id)).toEqual(['g2', 'g1']);
+  });
+
+  it('falls back to child bounding box when x/y not set', () => {
+    // n1 is at x=100, n2 is at x=400
+    // groupA contains n1 (leftmost), groupB contains n2 (rightmost)
+    const groupNodes = [
+      { ...makeNode('n1', 100, 100), group: 'groupA' },
+      { ...makeNode('n2', 400, 100), group: 'groupB' },
+    ];
+    const groups = [
+      { id: 'groupB', label: 'B' },
+      { id: 'groupA', label: 'A' },
+    ];
+    const sorted = sortGroupsByPosition(groups, groupNodes, 'LR');
+    expect(sorted.map((g) => g.id)).toEqual(['groupA', 'groupB']);
+  });
+
+  it('does not mutate the input array', () => {
+    const groups = [
+      { id: 'g2', label: 'B', x: 200, y: 0 },
+      { id: 'g1', label: 'A', x: 0, y: 0 },
+    ];
+    const original = [...groups];
+    sortGroupsByPosition(groups, nodes, 'LR');
+    expect(groups[0].id).toBe(original[0].id);
+  });
+
+  it('handles empty groups array', () => {
+    expect(sortGroupsByPosition([], nodes, 'TB')).toEqual([]);
   });
 });

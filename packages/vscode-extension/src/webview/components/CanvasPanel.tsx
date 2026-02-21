@@ -203,18 +203,17 @@ function CanvasPanelInner({ graph }: CanvasPanelProps) {
     onAddNode: graph.onAddNode,
     onAddNote: graph.onAddNote,
     onAddGroup: graph.onAddGroup,
-    onAutoLayout: graph.onRequestLayout,
-    onAutoLayoutForce: graph.onRequestLayoutForce,
-    onSortNodes: () => graph.onSortNodes(graph.layoutDirection),
+    onSortNodes: graph.onSortNodes,
     onExportSvg: graph.onExportSvg,
     onExportPng: graph.onExportPng,
-    onOpenSvg: graph.onOpenSvg,
+    onExportMermaid: graph.onExportMermaid,
     onUndo: graph.onUndo,
     onRedo: graph.onRedo,
     onToggleSearch: () => setShowSearch((v) => !v),
     onToggleShortcuts: () => setShowShortcuts((v) => !v),
     layoutDirection: graph.layoutDirection,
     onSetLayoutDirection: graph.onSetLayoutDirection,
+    selectedGroupId: graph.selectedGroupId,
   };
 
   return (

@@ -18,7 +18,7 @@ export type SemanticOp =
       id: string;
       changes: Partial<Omit<DiagramNode, 'id'>>;
     }
-  | { op: 'sort_nodes'; direction: LayoutDirection }
+  | { op: 'sort_nodes'; direction: LayoutDirection; groupId?: string }
   | {
       op: 'add_edge';
       edge: Partial<DiagramEdge> & { source: string; target: string };
