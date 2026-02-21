@@ -32,9 +32,6 @@ coverage/
 *.tmp
 .cache/
 
-# VS Code extension specific
-*.vsix
-
 # Test artifacts
 .vscode-test-web
 playwright-report

@@ -1,2 +1,1 @@
-[x] add apache license to the project if it fits my need (free to use for comercial and private, but it needs to be visible that I made it), No custom license pick one that is available and fits my needs.
-[x] generate a full project very high level diagram
+[] if item is pinned, user can still move it around, but agent or auto layout should not move it.

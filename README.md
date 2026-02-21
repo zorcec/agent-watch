@@ -3,7 +3,14 @@
 A VS Code extension that runs continuous, risk-focused code review **in the background while AI coding agents are working** — powered by GitHub Copilot.
 
 ## Project Structure
+## Architecture Diagram
 
+The project architecture is illustrated in the [architecture.diagram](architecture.diagram) file, which provides a visual overview of all major components and their interactions.
+
+**Diagram Description:**
+- Shows the relationship between the extension entry point, core libraries, webview components, and agent tools.
+- Highlights how the user, Copilot, and LM tools interact with the extension and diagram services.
+- Useful for understanding the flow of operations and dependencies within the project.
 ```
 agent-watch/
 ├── packages/
