@@ -8,6 +8,10 @@ export type WebviewMessage =
       position: { x: number; y: number };
     }
   | {
+      type: 'NODES_DRAGGED';
+      moves: Array<{ id: string; position: { x: number; y: number } }>;
+    }
+  | {
       type: 'GROUP_DRAGGED';
       id: string;
       position: { x: number; y: number };

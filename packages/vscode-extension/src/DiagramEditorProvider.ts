@@ -89,6 +89,10 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
         await this.diagramService.moveNode(msg.id, msg.position, document);
         break;
 
+      case 'NODES_DRAGGED':
+        await this.diagramService.moveNodes(msg.moves, document);
+        break;
+
       case 'GROUP_DRAGGED':
         await this.diagramService.moveGroup(msg.id, msg.position, document);
         break;

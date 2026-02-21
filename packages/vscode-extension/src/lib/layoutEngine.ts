@@ -17,12 +17,14 @@ export interface LayoutConfig {
 }
 
 export const DEFAULT_LAYOUT_CONFIG: LayoutConfig = {
-  rankdir: 'LR',
+  rankdir: 'TB',
   ranksep: 120,
-  nodesep: 60,
+  nodesep: 80,
   marginx: 60,
   marginy: 60,
 };
+
+const GRID_SIZE = 20;
 
 /**
  * Computes positions for unpinned nodes that sit exactly at the origin (x=0,y=0).
@@ -102,10 +104,13 @@ function computeDagreLayout(
     const n = g.node(node.id);
     const w = node.width > 0 ? node.width : DEFAULT_NODE_WIDTH;
     const h = node.height > 0 ? node.height : DEFAULT_NODE_HEIGHT;
+    // Snap to grid so auto-layout positions align with the canvas grid.
+    const rawX = n.x - w / 2;
+    const rawY = n.y - h / 2;
     return {
       nodeId: node.id,
-      x: Math.round(n.x - w / 2),
-      y: Math.round(n.y - h / 2),
+      x: Math.round(rawX / GRID_SIZE) * GRID_SIZE,
+      y: Math.round(rawY / GRID_SIZE) * GRID_SIZE,
     };
   });
 }

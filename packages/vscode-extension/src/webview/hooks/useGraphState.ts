@@ -37,7 +37,7 @@ export type GraphState = {
   selectedGroupId: string | null;
   onNodesChange: OnNodesChange<Node>;
   onEdgesChange: OnEdgesChange<Edge<DiagramEdgeData>>;
-  onNodeDragStop: (_event: React.MouseEvent, node: Node) => void;
+  onNodeDragStop: (_event: React.MouseEvent, node: Node, nodes: Node[]) => void;
   onConnect: (connection: Connection) => void;
   onNodesDelete: (deleted: Node[]) => void;
   onEdgesDelete: (deleted: Edge[]) => void;
@@ -116,37 +116,60 @@ export function useGraphState(
   );
 
   const onNodeDragStop = useCallback(
-    (_event: React.MouseEvent, node: Node) => {
-      if (node.type === 'diagramGroup') {
-        bridge.postMessage({
-          type: 'GROUP_DRAGGED',
-          id: node.id,
-          position: {
-            x: Math.round(node.position.x),
-            y: Math.round(node.position.y),
-          },
-        });
+    (_event: React.MouseEvent, node: Node, nodes: Node[]) => {
+      // When only one node is dragged (or it's a group), use the single-node path.
+      if (nodes.length <= 1) {
+        if (node.type === 'diagramGroup') {
+          bridge.postMessage({
+            type: 'GROUP_DRAGGED',
+            id: node.id,
+            position: {
+              x: Math.round(node.position.x),
+              y: Math.round(node.position.y),
+            },
+          });
+          return;
+        }
+
+        let absX = Math.round(node.position.x);
+        let absY = Math.round(node.position.y);
+        if (node.parentId) {
+          const parent = allNodes.find((n) => n.id === node.parentId);
+          if (parent) {
+            absX += Math.round(parent.position.x);
+            absY += Math.round(parent.position.y);
+          }
+        }
+        bridge.postMessage({ type: 'NODE_DRAGGED', id: node.id, position: { x: absX, y: absY } });
         return;
       }
 
-      // For regular nodes (including those inside a group), compute and send the
-      // absolute position. React Flow reports child positions relative to the parent.
-      let absX = Math.round(node.position.x);
-      let absY = Math.round(node.position.y);
-
-      if (node.parentId) {
-        const parent = allNodes.find((n) => n.id === node.parentId);
-        if (parent) {
-          absX += Math.round(parent.position.x);
-          absY += Math.round(parent.position.y);
+      // Multi-node drag: batch all moved regular nodes in a single message.
+      const moves: Array<{ id: string; position: { x: number; y: number } }> = [];
+      for (const n of nodes) {
+        if (n.type === 'diagramGroup') {
+          // Persist each dragged group individually.
+          bridge.postMessage({
+            type: 'GROUP_DRAGGED',
+            id: n.id,
+            position: { x: Math.round(n.position.x), y: Math.round(n.position.y) },
+          });
+          continue;
         }
+        let absX = Math.round(n.position.x);
+        let absY = Math.round(n.position.y);
+        if (n.parentId) {
+          const parent = allNodes.find((pn) => pn.id === n.parentId);
+          if (parent) {
+            absX += Math.round(parent.position.x);
+            absY += Math.round(parent.position.y);
+          }
+        }
+        moves.push({ id: n.id, position: { x: absX, y: absY } });
       }
-
-      bridge.postMessage({
-        type: 'NODE_DRAGGED',
-        id: node.id,
-        position: { x: absX, y: absY },
-      });
+      if (moves.length > 0) {
+        bridge.postMessage({ type: 'NODES_DRAGGED', moves });
+      }
     },
     [bridge, allNodes],
   );

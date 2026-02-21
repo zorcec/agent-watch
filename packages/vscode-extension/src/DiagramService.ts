@@ -80,6 +80,34 @@ export class DiagramService {
   }
 
   /**
+   * Moves multiple nodes to explicit positions in a single write.
+   * Used for batch drag of a multi-node selection.
+   */
+  async moveNodes(
+    moves: Array<{ id: string; position: { x: number; y: number } }>,
+    doc?: vscode.TextDocument,
+  ): Promise<void> {
+    const target = doc ?? this.activeDocument;
+    if (!target) return;
+
+    const current = this.parseDocument(target);
+    if (!current) return;
+
+    const modified = structuredClone(current);
+    for (const { id, position } of moves) {
+      const node = modified.nodes.find((n) => n.id === id);
+      if (!node) continue;
+      node.x = position.x;
+      node.y = position.y;
+      node.pinned = true;
+    }
+
+    modified.meta.modified = new Date().toISOString();
+    modified.agentContext = generateAgentContext(modified);
+    await writeDocumentToFile(target, modified);
+  }
+
+  /**
    * Moves a node to an explicit position, bypassing the pinned check.
    * This is used for user-initiated drags (where even a pinned node can be repositioned).
    * Sets `pinned = true` so the auto-layout won't displace it afterwards.

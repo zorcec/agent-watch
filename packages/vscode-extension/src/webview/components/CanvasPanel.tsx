@@ -131,13 +131,16 @@ export function CanvasPanel({ graph }: CanvasPanelProps) {
           connectionMode={ConnectionMode.Loose}
           fitView
           defaultEdgeOptions={{ type: 'diagramEdge' }}
+          selectionOnDrag
+          panOnDrag={[2]}
+          panOnScroll
           snapToGrid
-          snapGrid={[16, 16]}
+          snapGrid={[20, 20]}
           deleteKeyCode={['Backspace', 'Delete']}
           multiSelectionKeyCode="Shift"
           data-testid="react-flow-canvas"
         >
-          <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
+          <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
           <MiniMap
             nodeColor={(n) =>
               MINIMAP_NODE_COLORS[n.data?.color as string] ?? '#555'
