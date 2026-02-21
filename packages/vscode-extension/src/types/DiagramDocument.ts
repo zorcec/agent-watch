@@ -1,4 +1,6 @@
-export type NodeShape = 'rectangle' | 'rounded' | 'diamond' | 'cylinder';
+export type NodeShape = 'rectangle' | 'rounded' | 'diamond' | 'cylinder' | 'note';
+
+export type LayoutDirection = 'TB' | 'LR' | 'BT' | 'RL';
 
 export type EdgeStyle = 'solid' | 'dashed' | 'dotted';
 
@@ -128,6 +130,8 @@ export interface DiagramGroup {
    * Set on first drag; computed from children's bounding box when absent.
    */
   y?: number;
+  /** When true the group is collapsed into a compact header; child nodes are hidden. */
+  collapsed?: boolean;
 }
 
 export interface DiagramMeta {
@@ -136,6 +140,8 @@ export interface DiagramMeta {
   description?: string;
   created: string;
   modified: string;
+  /** Last-used auto-layout direction. Persisted so the toolbar remembers the user's choice. */
+  layoutDirection?: LayoutDirection;
   /**
    * C4 abstraction level — helps agents scope their reasoning.
    *  - context: System context (users + external systems)
@@ -239,6 +245,7 @@ export const NODE_SHAPES: readonly NodeShape[] = [
   'rounded',
   'diamond',
   'cylinder',
+  'note',
 ] as const;
 
 export const NODE_TYPES: readonly NodeType[] = [

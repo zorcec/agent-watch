@@ -120,6 +120,13 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
         );
         break;
 
+      case 'ADD_NODES':
+        await this.diagramService.applySemanticOps(
+          msg.nodes.map((n) => ({ op: 'add_node' as const, node: n as any })),
+          document,
+        );
+        break;
+
       case 'DELETE_NODES':
         await this.diagramService.applySemanticOps(
           msg.nodeIds.map((id) => ({ op: 'remove_node' as const, id })),
@@ -170,10 +177,13 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
         break;
 
       case 'UPDATE_NODE_PROPS': {
-        const { group, ...rest } = msg.changes;
+        const { group, pinned, ...rest } = msg.changes;
         const changes: any = { ...rest };
         if (group !== undefined) {
           changes.group = group === null ? undefined : group;
+        }
+        if (pinned !== undefined) {
+          changes.pinned = pinned;
         }
         await this.diagramService.applySemanticOps(
           [{ op: 'update_node', id: msg.id, changes }],
@@ -189,8 +199,24 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
         );
         break;
 
+      case 'EDGE_RECONNECTED':
+        await this.diagramService.reconnectEdge(msg.id, msg.newSource, msg.newTarget, document);
+        break;
+
       case 'REQUEST_LAYOUT':
-        await this.diagramService.autoLayoutAll(document);
+        await this.diagramService.autoLayoutAll(document, msg.direction);
+        break;
+
+      case 'REQUEST_LAYOUT_FORCE':
+        await this.diagramService.autoLayoutForce(document, msg.direction);
+        break;
+
+      case 'UNDO':
+        await this.diagramService.undo(document);
+        break;
+
+      case 'REDO':
+        await this.diagramService.redo(document);
         break;
 
       case 'EXPORT':

@@ -1,4 +1,4 @@
-import type { DiagramDocument, NodeShape, NodeColor, EdgeStyle, ArrowType } from '../types/DiagramDocument';
+import type { DiagramDocument, NodeShape, NodeColor, EdgeStyle, ArrowType, LayoutDirection } from '../types/DiagramDocument';
 
 export type WebviewMessage =
   | { type: 'WEBVIEW_READY' }
@@ -25,6 +25,10 @@ export type WebviewMessage =
       type: 'ADD_NODE';
       node: { label: string; shape?: NodeShape; color?: NodeColor; notes?: string };
     }
+  | {
+      type: 'ADD_NODES';
+      nodes: Array<{ label: string; shape?: NodeShape; color?: NodeColor; notes?: string; x?: number; y?: number }>;
+    }
   | { type: 'DELETE_NODES'; nodeIds: string[] }
   | {
       type: 'ADD_GROUP';
@@ -34,7 +38,7 @@ export type WebviewMessage =
   | {
       type: 'UPDATE_GROUP_PROPS';
       id: string;
-      changes: { label?: string; color?: NodeColor };
+      changes: { label?: string; color?: NodeColor; collapsed?: boolean };
     }
   | {
       type: 'ADD_EDGE';
@@ -51,6 +55,7 @@ export type WebviewMessage =
         color?: NodeColor;
         notes?: string;
         group?: string | null;
+        pinned?: boolean;
       };
     }
   | {
@@ -63,7 +68,24 @@ export type WebviewMessage =
         animated?: boolean;
       };
     }
-  | { type: 'REQUEST_LAYOUT' }
+  | {
+      type: 'EDGE_RECONNECTED';
+      id: string;
+      newSource: string;
+      newTarget: string;
+    }
+  | {
+      /** Normal auto-layout (respects pinned nodes). */
+      type: 'REQUEST_LAYOUT';
+      direction?: LayoutDirection;
+    }
+  | {
+      /** Force auto-layout — repositions ALL nodes including pinned ones. */
+      type: 'REQUEST_LAYOUT_FORCE';
+      direction?: LayoutDirection;
+    }
+  | { type: 'UNDO' }
+  | { type: 'REDO' }
   | {
       type: 'EXPORT';
       format: 'svg' | 'png' | 'mermaid';

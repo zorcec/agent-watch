@@ -29,6 +29,15 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('diagramflow.autoLayout', () => {
       diagramService.autoLayoutAll();
     }),
+    vscode.commands.registerCommand('diagramflow.autoLayoutForce', () => {
+      diagramService.autoLayoutForce();
+    }),
+    vscode.commands.registerCommand('diagramflow.undo', () => {
+      diagramService.undo();
+    }),
+    vscode.commands.registerCommand('diagramflow.redo', () => {
+      diagramService.redo();
+    }),
     vscode.commands.registerCommand('diagramflow.importSVG', () => {
       DiagramEditorProvider.openSvgImportFlow();
     }),

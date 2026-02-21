@@ -24,8 +24,16 @@ import type {
   NodeColor,
   EdgeStyle,
   ArrowType,
+  LayoutDirection,
 } from '../../types/DiagramDocument';
 import type { VSCodeBridge } from './useVSCodeBridge';
+
+export type ClipboardNode = {
+  label: string;
+  shape: NodeShape;
+  color: NodeColor;
+  notes?: string;
+};
 
 export type GraphState = {
   nodes: Node<DiagramNodeData>[];
@@ -35,16 +43,23 @@ export type GraphState = {
   selectedNodeId: string | null;
   selectedEdgeId: string | null;
   selectedGroupId: string | null;
+  layoutDirection: LayoutDirection;
+  layoutPending: boolean;
+  searchQuery: string;
+  clipboard: ClipboardNode[];
   onNodesChange: OnNodesChange<Node>;
   onEdgesChange: OnEdgesChange<Edge<DiagramEdgeData>>;
   onNodeDragStop: (_event: React.MouseEvent, node: Node, nodes: Node[]) => void;
   onConnect: (connection: Connection) => void;
+  onReconnect: (oldEdge: Edge, newConnection: Connection) => void;
   onNodesDelete: (deleted: Node[]) => void;
   onEdgesDelete: (deleted: Edge[]) => void;
   onSelectionChange: (params: { nodes: Node[]; edges: Edge[] }) => void;
   onAddNode: () => void;
+  onAddNote: () => void;
   onAddGroup: () => void;
   onNodeLabelChange: (id: string, label: string) => void;
+  onUnpinNode: (id: string) => void;
   onUpdateNodeProps: (
     id: string,
     changes: {
@@ -53,14 +68,24 @@ export type GraphState = {
       color?: NodeColor;
       notes?: string;
       group?: string | null;
+      pinned?: boolean;
     },
   ) => void;
   onUpdateEdgeProps: (
     id: string,
     changes: { label?: string; style?: EdgeStyle; arrow?: ArrowType; animated?: boolean },
   ) => void;
-  onUpdateGroupProps: (id: string, changes: { label?: string; color?: NodeColor }) => void;
-  onRequestLayout: () => void;
+  onUpdateGroupProps: (id: string, changes: { label?: string; color?: NodeColor; collapsed?: boolean }) => void;
+  onToggleGroupCollapse: (id: string) => void;
+  onRequestLayout: (direction?: LayoutDirection) => void;
+  onRequestLayoutForce: (direction?: LayoutDirection) => void;
+  onSetLayoutDirection: (direction: LayoutDirection) => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  onCopy: () => void;
+  onPaste: () => void;
+  onSetSearch: (query: string) => void;
+  onFitViewDone: () => void;
   onExportSvg: () => void;
   onExportPng: () => void;
   onOpenSvg: () => void;
@@ -73,10 +98,15 @@ export function useGraphState(
   const [allNodes, setAllNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge<DiagramEdgeData>>([]);
   const lastDocHashRef = useRef<string>('');
+  const layoutPendingRef = useRef(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [groups, setGroups] = useState<DiagramGroup[]>([]);
+  const [layoutDirection, setLayoutDirection] = useState<LayoutDirection>('TB');
+  const [layoutPending, setLayoutPending] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [clipboard, setClipboard] = useState<ClipboardNode[]>([]);
 
   useEffect(() => {
     if (!doc) return;
@@ -90,6 +120,16 @@ export function useGraphState(
     setAllNodes([...groupNodes, ...regularNodes]);
     setEdges(docToFlowEdges(doc));
     setGroups(doc.groups ?? []);
+
+    if (doc.meta.layoutDirection) {
+      setLayoutDirection(doc.meta.layoutDirection);
+    }
+
+    // If a layout was pending, signal CanvasPanel to fitView.
+    if (layoutPendingRef.current) {
+      layoutPendingRef.current = false;
+      setLayoutPending(true);
+    }
   }, [doc, setAllNodes, setEdges]);
 
   // Regular (non-group) nodes, used by PropertiesPanel.
@@ -184,6 +224,18 @@ export function useGraphState(
     [bridge],
   );
 
+  const onReconnect = useCallback(
+    (oldEdge: Edge, newConnection: Connection) => {
+      bridge.postMessage({
+        type: 'EDGE_RECONNECTED',
+        id: oldEdge.id,
+        newSource: newConnection.source,
+        newTarget: newConnection.target,
+      });
+    },
+    [bridge],
+  );
+
   const onNodesDelete = useCallback(
     (deleted: Node[]) => {
       const nodeIds = deleted
@@ -220,6 +272,13 @@ export function useGraphState(
     });
   }, [bridge]);
 
+  const onAddNote = useCallback(() => {
+    bridge.postMessage({
+      type: 'ADD_NODE',
+      node: { label: 'Note', shape: 'note', color: 'yellow' },
+    });
+  }, [bridge]);
+
   const onAddGroup = useCallback(() => {
     bridge.postMessage({ type: 'ADD_GROUP', label: 'New Group' });
   }, [bridge]);
@@ -227,6 +286,13 @@ export function useGraphState(
   const onNodeLabelChange = useCallback(
     (id: string, label: string) => {
       bridge.postMessage({ type: 'UPDATE_NODE_LABEL', id, label });
+    },
+    [bridge],
+  );
+
+  const onUnpinNode = useCallback(
+    (id: string) => {
+      bridge.postMessage({ type: 'UPDATE_NODE_PROPS', id, changes: { pinned: false } });
     },
     [bridge],
   );
@@ -240,6 +306,7 @@ export function useGraphState(
         color?: NodeColor;
         notes?: string;
         group?: string | null;
+        pinned?: boolean;
       },
     ) => {
       bridge.postMessage({ type: 'UPDATE_NODE_PROPS', id, changes });
@@ -258,15 +325,84 @@ export function useGraphState(
   );
 
   const onUpdateGroupProps = useCallback(
-    (id: string, changes: { label?: string; color?: NodeColor }) => {
+    (id: string, changes: { label?: string; color?: NodeColor; collapsed?: boolean }) => {
       bridge.postMessage({ type: 'UPDATE_GROUP_PROPS', id, changes });
     },
     [bridge],
   );
 
-  const onRequestLayout = useCallback(() => {
-    bridge.postMessage({ type: 'REQUEST_LAYOUT' });
+  const onToggleGroupCollapse = useCallback(
+    (id: string) => {
+      const group = groups.find((g) => g.id === id);
+      if (!group) return;
+      bridge.postMessage({
+        type: 'UPDATE_GROUP_PROPS',
+        id,
+        changes: { collapsed: !group.collapsed },
+      });
+    },
+    [bridge, groups],
+  );
+
+  const onRequestLayout = useCallback(
+    (direction?: LayoutDirection) => {
+      layoutPendingRef.current = true;
+      bridge.postMessage({ type: 'REQUEST_LAYOUT', direction: direction ?? layoutDirection });
+    },
+    [bridge, layoutDirection],
+  );
+
+  const onRequestLayoutForce = useCallback(
+    (direction?: LayoutDirection) => {
+      layoutPendingRef.current = true;
+      bridge.postMessage({ type: 'REQUEST_LAYOUT_FORCE', direction: direction ?? layoutDirection });
+    },
+    [bridge, layoutDirection],
+  );
+
+  const onSetLayoutDirection = useCallback((direction: LayoutDirection) => {
+    setLayoutDirection(direction);
+  }, []);
+
+  const onUndo = useCallback(() => {
+    bridge.postMessage({ type: 'UNDO' });
   }, [bridge]);
+
+  const onRedo = useCallback(() => {
+    bridge.postMessage({ type: 'REDO' });
+  }, [bridge]);
+
+  const onCopy = useCallback(() => {
+    const selected = nodes.filter((n) => n.selected);
+    if (selected.length === 0) return;
+    setClipboard(
+      selected.map((n) => ({
+        label: n.data.label,
+        shape: n.data.shape,
+        color: n.data.color,
+        notes: n.data.notes,
+      })),
+    );
+  }, [nodes]);
+
+  const onPaste = useCallback(() => {
+    if (clipboard.length === 0) return;
+    bridge.postMessage({
+      type: 'ADD_NODES',
+      nodes: clipboard.map((n) => ({
+        ...n,
+        label: `${n.label} (copy)`,
+      })),
+    });
+  }, [bridge, clipboard]);
+
+  const onSetSearch = useCallback((query: string) => {
+    setSearchQuery(query);
+  }, []);
+
+  const onFitViewDone = useCallback(() => {
+    setLayoutPending(false);
+  }, []);
 
   const onExportSvg = useCallback(() => {
     const svgData = buildExportSvg(doc);
@@ -294,20 +430,36 @@ export function useGraphState(
     selectedNodeId,
     selectedEdgeId,
     selectedGroupId,
+    layoutDirection,
+    layoutPending,
+    searchQuery,
+    clipboard,
     onNodesChange,
     onEdgesChange,
     onNodeDragStop,
     onConnect,
+    onReconnect,
     onNodesDelete,
     onEdgesDelete,
     onSelectionChange,
     onAddNode,
+    onAddNote,
     onAddGroup,
     onNodeLabelChange,
+    onUnpinNode,
     onUpdateNodeProps,
     onUpdateEdgeProps,
     onUpdateGroupProps,
+    onToggleGroupCollapse,
     onRequestLayout,
+    onRequestLayoutForce,
+    onSetLayoutDirection,
+    onUndo,
+    onRedo,
+    onCopy,
+    onPaste,
+    onSetSearch,
+    onFitViewDone,
     onExportSvg,
     onExportPng,
     onOpenSvg,

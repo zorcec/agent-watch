@@ -60,6 +60,18 @@ export function computeFullLayout(
 }
 
 /**
+ * Computes positions for ALL nodes (including pinned ones).
+ * Used by the "Force Auto Layout" command that overrides user-pinned positions.
+ */
+export function computeForcedLayout(
+  doc: DiagramDocument,
+  config: LayoutConfig = DEFAULT_LAYOUT_CONFIG,
+): LayoutResult[] {
+  if (doc.nodes.length === 0) return [];
+  return computeDagreLayout(doc, doc.nodes, config);
+}
+
+/**
  * Dagre-powered layout. Builds a directed graph from the diagram document,
  * runs Dagre's Sugiyama-style layout, and maps results back to diagram coordinates.
  *

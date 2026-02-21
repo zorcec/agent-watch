@@ -28,6 +28,7 @@ export type DiagramEdgeData = {
 export type DiagramGroupNodeData = {
   label: string;
   color?: NodeColor;
+  collapsed?: boolean;
 };
 
 /**
@@ -80,13 +81,15 @@ export function docToFlowGroupNodes(doc: DiagramDocument): Node<DiagramGroupNode
     const bounds = computeGroupBounds(doc.nodes, group.id);
     const origin = resolveGroupOrigin(group, doc.nodes);
     const width = bounds?.width ?? GROUP_MIN_WIDTH;
-    const height = bounds?.height ?? GROUP_MIN_HEIGHT;
+    const height = group.collapsed
+      ? GROUP_LABEL_HEIGHT + GROUP_PADDING
+      : (bounds?.height ?? GROUP_MIN_HEIGHT);
 
     return {
       id: group.id,
       type: 'diagramGroup',
       position: { x: origin.x, y: origin.y },
-      data: { label: group.label, color: group.color },
+      data: { label: group.label, color: group.color, collapsed: group.collapsed },
       style: { width, height },
       // Group nodes render behind child nodes.
       zIndex: -1,
@@ -97,6 +100,11 @@ export function docToFlowGroupNodes(doc: DiagramDocument): Node<DiagramGroupNode
 }
 
 export function docToFlowNodes(doc: DiagramDocument): Node<DiagramNodeData>[] {
+  // Build set of collapsed group IDs so child nodes can be hidden.
+  const collapsedGroupIds = new Set(
+    (doc.groups ?? []).filter((g) => g.collapsed).map((g) => g.id),
+  );
+
   // Pre-compute group origins for coordinate conversion.
   const groupOrigins = new Map<string, { x: number; y: number }>();
   if (doc.groups) {
@@ -105,7 +113,9 @@ export function docToFlowNodes(doc: DiagramDocument): Node<DiagramNodeData>[] {
     }
   }
 
-  return doc.nodes.map((n) => {
+  return doc.nodes
+    .filter((n) => !n.group || !collapsedGroupIds.has(n.group))
+    .map((n) => {
     const w = n.width > 0 ? n.width : DEFAULT_NODE_WIDTH;
     const h = n.height > 0 ? n.height : DEFAULT_NODE_HEIGHT;
 
@@ -139,13 +149,24 @@ export function docToFlowNodes(doc: DiagramDocument): Node<DiagramNodeData>[] {
 }
 
 export function docToFlowEdges(doc: DiagramDocument): Edge<DiagramEdgeData>[] {
-  return doc.edges.map((e) => ({
-    id: e.id,
-    source: e.source,
-    target: e.target,
-    type: 'diagramEdge',
-    label: e.label ?? '',
-    animated: e.animated ?? false,
-    data: { style: e.style, arrow: e.arrow },
-  }));
+  // Hide edges whose source or target is inside a collapsed group.
+  const collapsedGroupIds = new Set(
+    (doc.groups ?? []).filter((g) => g.collapsed).map((g) => g.id),
+  );
+  const hiddenNodeIds = new Set(
+    doc.nodes.filter((n) => n.group && collapsedGroupIds.has(n.group)).map((n) => n.id),
+  );
+
+  return doc.edges
+    .filter((e) => !hiddenNodeIds.has(e.source) && !hiddenNodeIds.has(e.target))
+    .map((e) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      type: 'diagramEdge',
+      label: e.label ?? '',
+      animated: e.animated ?? false,
+      reconnectable: true,
+      data: { style: e.style, arrow: e.arrow },
+    }));
 }

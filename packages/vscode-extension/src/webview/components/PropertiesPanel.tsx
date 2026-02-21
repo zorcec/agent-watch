@@ -10,7 +10,7 @@ type NodeProps = {
   groups: DiagramGroup[];
   onUpdateNode: (
     id: string,
-    changes: { label?: string; shape?: NodeShape; color?: NodeColor; notes?: string; group?: string | null },
+    changes: { label?: string; shape?: NodeShape; color?: NodeColor; notes?: string; group?: string | null; pinned?: boolean },
   ) => void;
 };
 
@@ -35,6 +35,7 @@ const SHAPE_LABELS: Record<NodeShape, string> = {
   rounded: 'Rounded',
   diamond: 'Diamond',
   cylinder: 'Cylinder',
+  note: 'Note',
 };
 
 const COLOR_LABELS: Record<NodeColor, string> = {
@@ -198,6 +199,19 @@ function NodePropertiesPanel({ node, groups, onUpdateNode }: NodeProps) {
           rows={4}
           placeholder="Optional notes for this node…"
           data-testid="prop-node-notes"
+        />
+      </div>
+
+      <div className="prop-group prop-group--row">
+        <label className="prop-label" htmlFor="prop-node-pinned">Pinned (lock position)</label>
+        <input
+          id="prop-node-pinned"
+          type="checkbox"
+          className="prop-checkbox"
+          checked={node.data.pinned ?? false}
+          onChange={(e) => onUpdateNode(node.id, { pinned: e.target.checked })}
+          title="When pinned, auto-layout won't move this node"
+          data-testid="prop-node-pinned"
         />
       </div>
     </aside>

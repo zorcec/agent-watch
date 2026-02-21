@@ -6,6 +6,7 @@ import type { DiagramNodeData } from '../lib/docToFlow';
 type DiagramNodeProps = NodeProps & {
   data: DiagramNodeData & {
     onLabelChange?: (id: string, label: string) => void;
+    onUnpin?: (id: string) => void;
   };
 };
 
@@ -25,14 +26,19 @@ export const DiagramNode = memo(({ id, data, selected }: DiagramNodeProps) => {
     setEditing(true);
   }, [data.label]);
 
+  const isNote = data.shape === 'note';
   const shapeClass = `diagram-node shape-${data.shape} color-${data.color}`;
 
   return (
     <>
-      <Handle type="target" position={Position.Top} id="top" />
-      <Handle type="target" position={Position.Left} id="left" />
-      <Handle type="source" position={Position.Bottom} id="bottom" />
-      <Handle type="source" position={Position.Right} id="right" />
+      {!isNote && (
+        <>
+          <Handle type="target" position={Position.Top} id="top" />
+          <Handle type="target" position={Position.Left} id="left" />
+          <Handle type="source" position={Position.Bottom} id="bottom" />
+          <Handle type="source" position={Position.Right} id="right" />
+        </>
+      )}
 
       <div
         className={shapeClass}
@@ -69,6 +75,15 @@ export const DiagramNode = memo(({ id, data, selected }: DiagramNodeProps) => {
           >
             ✏️
           </button>
+          {data.pinned && (
+            <button
+              className="toolbar-action-btn"
+              onClick={() => data.onUnpin?.(id)}
+              title="Unpin node (allow auto-layout to reposition)"
+            >
+              📍
+            </button>
+          )}
         </div>
       </NodeToolbar>
     </>

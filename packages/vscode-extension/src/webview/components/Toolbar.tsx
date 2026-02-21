@@ -1,23 +1,43 @@
 import { useReactFlow } from '@xyflow/react';
+import type { LayoutDirection } from '../../types/DiagramDocument';
 
 type ToolbarProps = {
   onAddNode: () => void;
+  onAddNote: () => void;
   onAddGroup: () => void;
   onAutoLayout: () => void;
+  onAutoLayoutForce: () => void;
   onExportSvg: () => void;
   onExportPng: () => void;
   onOpenSvg: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  onToggleSearch: () => void;
+  onToggleShortcuts: () => void;
+  layoutDirection: LayoutDirection;
+  onSetLayoutDirection: (dir: LayoutDirection) => void;
 };
 
 export function Toolbar({
   onAddNode,
+  onAddNote,
   onAddGroup,
   onAutoLayout,
+  onAutoLayoutForce,
   onExportSvg,
   onExportPng,
   onOpenSvg,
+  onUndo,
+  onRedo,
+  onToggleSearch,
+  onToggleShortcuts,
+  layoutDirection,
+  onSetLayoutDirection,
 }: ToolbarProps) {
   const { fitView, zoomIn, zoomOut } = useReactFlow();
+
+  const toggleDirection = () =>
+    onSetLayoutDirection(layoutDirection === 'TB' ? 'LR' : layoutDirection === 'LR' ? 'BT' : layoutDirection === 'BT' ? 'RL' : 'TB');
 
   return (
     <div className="toolbar" data-testid="toolbar">
@@ -31,6 +51,14 @@ export function Toolbar({
           + Node
         </button>
         <button
+          onClick={onAddNote}
+          title="Add Sticky Note"
+          data-testid="btn-add-note"
+          className="toolbar-btn"
+        >
+          📝 Note
+        </button>
+        <button
           onClick={onAddGroup}
           title="Add Group (G)"
           data-testid="btn-add-group"
@@ -39,14 +67,50 @@ export function Toolbar({
           ⬡ Group
         </button>
       </div>
+
       <div className="toolbar-group">
         <button
+          onClick={onUndo}
+          title="Undo (Ctrl+Z)"
+          data-testid="btn-undo"
+          className="toolbar-btn"
+        >
+          ↩ Undo
+        </button>
+        <button
+          onClick={onRedo}
+          title="Redo (Ctrl+Shift+Z)"
+          data-testid="btn-redo"
+          className="toolbar-btn"
+        >
+          ↪ Redo
+        </button>
+      </div>
+
+      <div className="toolbar-group">
+        <button
+          onClick={toggleDirection}
+          title={`Layout direction: ${layoutDirection} (click to cycle)`}
+          data-testid="btn-layout-direction"
+          className="toolbar-btn toolbar-btn--direction"
+        >
+          {layoutDirection === 'TB' ? '↕ TB' : layoutDirection === 'LR' ? '↔ LR' : layoutDirection === 'BT' ? '↕ BT' : '↔ RL'}
+        </button>
+        <button
           onClick={onAutoLayout}
-          title="Auto Layout (L)"
+          title="Auto Layout — repositions unpinned nodes (L)"
           data-testid="btn-layout"
           className="toolbar-btn"
         >
           ⬡ Layout
+        </button>
+        <button
+          onClick={onAutoLayoutForce}
+          title="Force Layout — repositions ALL nodes including pinned (Shift+L)"
+          data-testid="btn-layout-force"
+          className="toolbar-btn"
+        >
+          ⬡! Force
         </button>
         <button
           onClick={() => fitView({ padding: 0.2 })}
@@ -71,6 +135,7 @@ export function Toolbar({
           −
         </button>
       </div>
+
       <div className="toolbar-group">
         <button
           onClick={onOpenSvg}
@@ -95,6 +160,25 @@ export function Toolbar({
           className="toolbar-btn"
         >
           ↓ PNG
+        </button>
+      </div>
+
+      <div className="toolbar-group toolbar-group--right">
+        <button
+          onClick={onToggleSearch}
+          title="Search nodes (Ctrl+F)"
+          data-testid="btn-search"
+          className="toolbar-btn"
+        >
+          🔍
+        </button>
+        <button
+          onClick={onToggleShortcuts}
+          title="Keyboard shortcuts (?)"
+          data-testid="btn-shortcuts"
+          className="toolbar-btn"
+        >
+          ?
         </button>
       </div>
     </div>

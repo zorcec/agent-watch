@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -7,12 +7,16 @@ import {
   Controls,
   BackgroundVariant,
   ConnectionMode,
+  useReactFlow,
 } from '@xyflow/react';
 import { DiagramNode } from './DiagramNode';
 import { DiagramEdge } from './DiagramEdge';
 import { DiagramGroupNode } from './DiagramGroupNode';
 import { Toolbar } from './Toolbar';
 import { PropertiesPanel } from './PropertiesPanel';
+import { SearchBar } from './SearchBar';
+import { ShortcutsPanel } from './ShortcutsPanel';
+import { PanningHint } from './PanningHint';
 import type { GraphState } from '../hooks/useGraphState';
 
 const nodeTypes = { diagramNode: DiagramNode, diagramGroup: DiagramGroupNode };
@@ -31,22 +35,82 @@ type CanvasPanelProps = {
   graph: GraphState;
 };
 
-export function CanvasPanel({ graph }: CanvasPanelProps) {
+/** Inner component that has access to the ReactFlow instance. */
+function CanvasPanelInner({ graph }: CanvasPanelProps) {
+  const { fitView } = useReactFlow();
+  const [showSearch, setShowSearch] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+
+  // Fit view whenever a layout request completes.
+  useEffect(() => {
+    if (graph.layoutPending) {
+      // layoutPending becomes false after the doc arrives; schedule fitView immediately.
+      const id = requestAnimationFrame(() => {
+        fitView({ padding: 0.2 });
+        graph.onFitViewDone();
+      });
+      return () => cancelAnimationFrame(id);
+    }
+  }, [graph.layoutPending, fitView, graph.onFitViewDone]);
+
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      const ctrl = e.ctrlKey || e.metaKey;
+
+      if (ctrl && !e.shiftKey && e.key === 'z') {
+        e.preventDefault();
+        graph.onUndo();
+        return;
+      }
+      if (ctrl && (e.shiftKey && e.key === 'Z') || (ctrl && e.key === 'y')) {
+        e.preventDefault();
+        graph.onRedo();
+        return;
+      }
+      if (ctrl && e.key === 'c') {
+        graph.onCopy();
+        return;
+      }
+      if (ctrl && e.key === 'v') {
+        e.preventDefault();
+        graph.onPaste();
+        return;
+      }
+      if (ctrl && e.key === 'f') {
+        e.preventDefault();
+        setShowSearch((v) => !v);
+        return;
+      }
+
+      if (ctrl) return; // don't override other Ctrl combos
+
       if (e.key === 'n' || e.key === 'N') {
         e.preventDefault();
         graph.onAddNode();
       } else if (e.key === 'g' || e.key === 'G') {
         e.preventDefault();
         graph.onAddGroup();
-      } else if (e.key === 'l' || e.key === 'L') {
+      } else if (e.key === 'L') {
+        // Shift+L = force layout
+        e.preventDefault();
+        graph.onRequestLayoutForce();
+      } else if (e.key === 'l') {
         e.preventDefault();
         graph.onRequestLayout();
+      } else if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault();
+        fitView({ padding: 0.2 });
+      } else if (e.key === '?') {
+        e.preventDefault();
+        setShowShortcuts((v) => !v);
+      } else if (e.key === 'Escape') {
+        setShowSearch(false);
+        setShowShortcuts(false);
       }
     },
-    [graph],
+    [graph, fitView],
   );
 
   useEffect(() => {
@@ -54,16 +118,47 @@ export function CanvasPanel({ graph }: CanvasPanelProps) {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
+  // Compute highlighted node IDs from search query.
+  const highlightedNodeIds = useMemo(() => {
+    if (!graph.searchQuery.trim()) return null;
+    const q = graph.searchQuery.toLowerCase();
+    return new Set(
+      graph.nodes
+        .filter((n) => n.data.label.toLowerCase().includes(q))
+        .map((n) => n.id),
+    );
+  }, [graph.searchQuery, graph.nodes]);
+
+  const searchMatchCount = highlightedNodeIds?.size ?? 0;
+
   const nodesWithCallbacks = useMemo(
     () =>
       graph.allNodes.map((node) => {
-        if (node.type === 'diagramGroup') return node;
+        if (node.type === 'diagramGroup') {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              onToggleCollapse: graph.onToggleGroupCollapse,
+            },
+          };
+        }
+        const highlighted =
+          highlightedNodeIds !== null && !highlightedNodeIds.has(node.id);
         return {
           ...node,
-          data: { ...node.data, onLabelChange: graph.onNodeLabelChange },
+          data: {
+            ...node.data,
+            onLabelChange: graph.onNodeLabelChange,
+            onUnpin: graph.onUnpinNode,
+          },
+          style: {
+            ...node.style,
+            opacity: highlighted ? 0.25 : 1,
+          },
         };
       }),
-    [graph.allNodes, graph.onNodeLabelChange],
+    [graph.allNodes, graph.onNodeLabelChange, graph.onUnpinNode, graph.onToggleGroupCollapse, highlightedNodeIds],
   );
 
   // Determine what the PropertiesPanel should display.
@@ -105,16 +200,36 @@ export function CanvasPanel({ graph }: CanvasPanelProps) {
   ]);
 
   return (
-    <ReactFlowProvider>
     <div className="canvas-container" data-testid="canvas-container">
       <Toolbar
         onAddNode={graph.onAddNode}
+        onAddNote={graph.onAddNote}
         onAddGroup={graph.onAddGroup}
         onAutoLayout={graph.onRequestLayout}
+        onAutoLayoutForce={graph.onRequestLayoutForce}
         onExportSvg={graph.onExportSvg}
         onExportPng={graph.onExportPng}
         onOpenSvg={graph.onOpenSvg}
+        onUndo={graph.onUndo}
+        onRedo={graph.onRedo}
+        onToggleSearch={() => setShowSearch((v) => !v)}
+        onToggleShortcuts={() => setShowShortcuts((v) => !v)}
+        layoutDirection={graph.layoutDirection}
+        onSetLayoutDirection={graph.onSetLayoutDirection}
       />
+
+      {showSearch && (
+        <SearchBar
+          query={graph.searchQuery}
+          matchCount={searchMatchCount}
+          onQueryChange={graph.onSetSearch}
+          onClose={() => {
+            setShowSearch(false);
+            graph.onSetSearch('');
+          }}
+        />
+      )}
+
       <div className="canvas-main" data-testid="canvas-main">
         <ReactFlow
           nodes={nodesWithCallbacks}
@@ -124,6 +239,7 @@ export function CanvasPanel({ graph }: CanvasPanelProps) {
           onNodesChange={graph.onNodesChange}
           onEdgesChange={graph.onEdgesChange}
           onConnect={graph.onConnect}
+          onReconnect={graph.onReconnect}
           onNodeDragStop={graph.onNodeDragStop}
           onNodesDelete={graph.onNodesDelete}
           onEdgesDelete={graph.onEdgesDelete}
@@ -170,7 +286,21 @@ export function CanvasPanel({ graph }: CanvasPanelProps) {
 
         <PropertiesPanel {...propertiesPanelInput} />
       </div>
+
+      <PanningHint />
+
+      {showShortcuts && (
+        <ShortcutsPanel onClose={() => setShowShortcuts(false)} />
+      )}
     </div>
+  );
+}
+
+export function CanvasPanel({ graph }: CanvasPanelProps) {
+  return (
+    <ReactFlowProvider>
+      <CanvasPanelInner graph={graph} />
     </ReactFlowProvider>
   );
 }
+

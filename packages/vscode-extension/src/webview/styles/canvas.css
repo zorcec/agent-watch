@@ -603,3 +603,258 @@ body {
   border-color: var(--vscode-focusBorder, #007fd4);
   background: rgba(0, 127, 212, 0.06);
 }
+
+/* -------------------------------------------------------------------------
+   Sticky note shape
+   ---------------------------------------------------------------------- */
+
+.shape-note {
+  border-radius: 0 0 4px 4px;
+  position: relative;
+  font-size: 12px;
+  align-items: flex-start;
+  padding: 8px;
+  word-break: break-word;
+  white-space: normal;
+  text-align: left;
+  overflow: hidden;
+}
+
+/* Folded corner effect via pseudo-element */
+.shape-note::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 16px;
+  height: 16px;
+  background: rgba(0, 0, 0, 0.2);
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+}
+
+/* -------------------------------------------------------------------------
+   Collapsed group
+   ---------------------------------------------------------------------- */
+
+.diagram-group--collapsed {
+  border-style: solid;
+  cursor: pointer;
+}
+
+.diagram-group--collapsed .diagram-group-label {
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: var(--vscode-editor-foreground, #ccc);
+}
+
+/* -------------------------------------------------------------------------
+   Toolbar right-alignment
+   ---------------------------------------------------------------------- */
+
+.toolbar {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+
+.toolbar-group--right {
+  margin-left: auto;
+}
+
+/* -------------------------------------------------------------------------
+   Search bar
+   ---------------------------------------------------------------------- */
+
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--vscode-editorWidget-background, #2d2d2d);
+  border-bottom: 1px solid var(--vscode-editorWidget-border, #444);
+  flex-shrink: 0;
+}
+
+.search-icon {
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+.search-input {
+  flex: 1;
+  background: var(--vscode-input-background, #3c3c3c);
+  color: var(--vscode-input-foreground, #ccc);
+  border: 1px solid var(--vscode-input-border, #555);
+  border-radius: 3px;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-family: var(--vscode-font-family, sans-serif);
+  outline: none;
+  max-width: 260px;
+}
+
+.search-input:focus {
+  border-color: var(--vscode-focusBorder, #007fd4);
+}
+
+.search-match-count {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground, #888);
+  white-space: nowrap;
+}
+
+.search-close-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--vscode-button-secondaryForeground, #ccc);
+  font-size: 13px;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.search-close-btn:hover {
+  background: var(--vscode-list-hoverBackground, #444);
+}
+
+/* -------------------------------------------------------------------------
+   Shortcuts panel overlay
+   ---------------------------------------------------------------------- */
+
+.shortcuts-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.shortcuts-dialog {
+  background: var(--vscode-editorWidget-background, #252526);
+  border: 1px solid var(--vscode-editorWidget-border, #555);
+  border-radius: 8px;
+  padding: 20px 24px;
+  max-width: 560px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  font-family: var(--vscode-font-family, sans-serif);
+  font-size: 13px;
+  color: var(--vscode-editor-foreground, #ccc);
+}
+
+.shortcuts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.shortcuts-header h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.shortcuts-close-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--vscode-button-secondaryForeground, #ccc);
+  font-size: 16px;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.shortcuts-close-btn:hover {
+  background: var(--vscode-list-hoverBackground, #444);
+}
+
+.shortcuts-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.shortcuts-content h4 {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--vscode-descriptionForeground, #888);
+  margin: 0 0 8px 0;
+}
+
+.shortcuts-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.shortcuts-table tr {
+  border-bottom: 1px solid var(--vscode-panel-border, #333);
+}
+
+.shortcuts-table td {
+  padding: 5px 8px;
+  vertical-align: middle;
+}
+
+.shortcuts-table td:first-child {
+  width: 200px;
+}
+
+.kbd {
+  display: inline-block;
+  background: var(--vscode-button-secondaryBackground, #3a3a3a);
+  border: 1px solid var(--vscode-button-border, #555);
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-family: var(--vscode-editorFont-family, monospace);
+  white-space: nowrap;
+}
+
+/* -------------------------------------------------------------------------
+   Panning hint
+   ---------------------------------------------------------------------- */
+
+.panning-hint {
+  position: absolute;
+  bottom: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--vscode-editorWidget-background, #2d2d2d);
+  border: 1px solid var(--vscode-editorWidget-border, #555);
+  border-radius: 6px;
+  padding: 6px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  font-family: var(--vscode-font-family, sans-serif);
+  color: var(--vscode-editor-foreground, #ccc);
+  z-index: 100;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.panning-hint-text {
+  color: var(--vscode-descriptionForeground, #aaa);
+}
+
+.panning-hint-dismiss {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--vscode-descriptionForeground, #888);
+  font-size: 12px;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.panning-hint-dismiss:hover {
+  background: var(--vscode-list-hoverBackground, #444);
+  color: var(--vscode-editor-foreground, #ccc);
+}
