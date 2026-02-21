@@ -3,7 +3,7 @@
     "version": "1.0",
     "title": "DiagramFlow — Project Architecture",
     "created": "2026-02-21T00:00:00Z",
-    "modified": "2026-02-21T15:13:23.397Z"
+    "modified": "2026-02-21T15:14:55.171Z"
   },
   "nodes": [
     {
@@ -416,7 +416,7 @@
   },
   "agentContext": {
     "format": "diagramflow-v1",
-    "generatedAt": "2026-02-21T15:13:23.398Z",
+    "generatedAt": "2026-02-21T15:14:55.172Z",
     "summary": "\"DiagramFlow — Project Architecture\" contains 18 nodes (\"User / Developer\", \"GitHub Copilot\", \"Extension Entry (extension.ts)\", \"DiagramEditorProvider\", \"DiagramService\" and 13 more) connected by 19 edges. Grouped into: \"Extension Host (VS Code)\" (4 nodes), \"Core Libraries (Pure Functions)\" (6 nodes), \"Webview (React)\" (4 nodes).",
     "nodeIndex": [
       {
