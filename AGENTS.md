@@ -70,6 +70,7 @@ npm run lint:fix    # auto-fix fixable issues (formatting, simple style)
 
 - The project architecture is documented in [architecture.diagram](architecture.diagram).
 - This diagram provides a visual overview of all major components, their relationships, and operational flow.
+- Before beginning work, run the DiagramFlow tools (e.g. `diagramflow_getDiagram`) to programmatically read and inspect the diagram; the visual often holds key structural details.
 - All agents MUST read and understand the diagram before starting any project-related tasks.
 - Agents MUST keep the diagram up to date using the DiagramFlow tools; never modify the diagram file directly.
 
