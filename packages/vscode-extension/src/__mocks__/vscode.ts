@@ -75,6 +75,7 @@ export const workspace = {
   onDidChangeTextDocument: vi.fn().mockReturnValue({ dispose: vi.fn() }),
   openTextDocument: vi.fn().mockResolvedValue({ getText: vi.fn().mockReturnValue('{}') }),
   workspaceFolders: [],
+  textDocuments: [] as any[],
   fs: {
     writeFile: vi.fn().mockResolvedValue(undefined),
     readFile: vi.fn().mockResolvedValue(new Uint8Array()),

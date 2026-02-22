@@ -73,6 +73,13 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
         this.diagramService.setActiveDocument(null);
       }
     });
+
+    // Keep activeDocument up-to-date when the user switches back to this panel.
+    webviewPanel.onDidChangeViewState((e) => {
+      if (e.webviewPanel.active) {
+        this.diagramService.setActiveDocument(document);
+      }
+    });
   }
 
   private async handleWebviewMessage(

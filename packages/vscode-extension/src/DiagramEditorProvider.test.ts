@@ -84,6 +84,7 @@ function makeMockWebviewPanel(): vscode.WebviewPanel & {
       disposeHandler = handler;
       return { dispose: vi.fn() };
     }),
+    onDidChangeViewState: vi.fn(() => ({ dispose: vi.fn() })),
     get _messageHandlerRef() {
       return messageHandler;
     },

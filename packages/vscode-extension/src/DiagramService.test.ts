@@ -2,16 +2,21 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('vscode', () => import('./__mocks__/vscode'));
 vi.mock('nanoid', () => ({ nanoid: () => 'mock_id1' }));
+vi.mock('fs', () => ({
+  writeFileSync: vi.fn(),
+}));
 
 import { DiagramService } from './DiagramService';
 import type { DiagramDocument } from './types/DiagramDocument';
 import * as vscode from 'vscode';
+import * as nodeFs from 'fs';
 
 function makeMockTextDocument(content: string): vscode.TextDocument {
   return {
     getText: () => content,
     uri: vscode.Uri.file('/test/file.diagram'),
     lineCount: content.split('\n').length,
+    save: vi.fn().mockResolvedValue(true),
   } as unknown as vscode.TextDocument;
 }
 
@@ -113,7 +118,7 @@ describe('DiagramService', () => {
       ]);
 
       expect(result.success).toBe(true);
-      expect(vscode.workspace.applyEdit).toHaveBeenCalledTimes(1);
+      expect(nodeFs.writeFileSync).toHaveBeenCalledTimes(1);
     });
 
     it('uses explicit document parameter over active', async () => {
@@ -128,7 +133,8 @@ describe('DiagramService', () => {
       expect(result.success).toBe(true);
     });
 
-    it('returns error when workspace edit fails', async () => {
+    it('returns error when write fails', async () => {
+      vi.mocked(nodeFs.writeFileSync).mockImplementationOnce(() => { throw new Error('Write failed'); });
       vi.mocked(vscode.workspace.applyEdit).mockResolvedValueOnce(false);
 
       const validDoc = makeValidDoc();
@@ -147,7 +153,7 @@ describe('DiagramService', () => {
   describe('autoLayoutAll', () => {
     it('does nothing when no active document', async () => {
       await service.autoLayoutAll();
-      expect(vscode.workspace.applyEdit).not.toHaveBeenCalled();
+      expect(nodeFs.writeFileSync).not.toHaveBeenCalled();
     });
 
     it('does nothing for invalid document', async () => {
@@ -155,7 +161,7 @@ describe('DiagramService', () => {
       service.setActiveDocument(textDoc);
 
       await service.autoLayoutAll();
-      expect(vscode.workspace.applyEdit).not.toHaveBeenCalled();
+      expect(nodeFs.writeFileSync).not.toHaveBeenCalled();
     });
 
     it('resets pinned state and applies layout', async () => {
@@ -200,7 +206,7 @@ describe('DiagramService', () => {
 
       await service.autoLayoutAll();
 
-      expect(vscode.workspace.applyEdit).toHaveBeenCalledTimes(1);
+      expect(nodeFs.writeFileSync).toHaveBeenCalledTimes(1);
     });
 
     it('uses explicit document parameter', async () => {
@@ -209,7 +215,7 @@ describe('DiagramService', () => {
 
       await service.autoLayoutAll(textDoc);
 
-      expect(vscode.workspace.applyEdit).toHaveBeenCalledTimes(1);
+      expect(nodeFs.writeFileSync).toHaveBeenCalledTimes(1);
     });
 
     it('writes agentContext into the document after layout', async () => {
@@ -229,23 +235,17 @@ describe('DiagramService', () => {
       ];
 
       const textDoc = makeMockTextDocument(JSON.stringify(doc));
-      let writtenContent = '';
-      const applyEditMock = vi.mocked(vscode.workspace.applyEdit);
-      applyEditMock.mockImplementation(async (edit: vscode.WorkspaceEdit) => {
-        writtenContent = (edit as any)._edits?.[0]?.newText ?? '';
-        return true;
-      });
+      let written: any;
+      vi.mocked(nodeFs.writeFileSync).mockImplementation((_path, data) => { if (typeof data === 'string') written = JSON.parse(data); });
 
       await service.autoLayoutAll(textDoc);
 
-      if (writtenContent) {
-        const written = JSON.parse(writtenContent);
+      expect(nodeFs.writeFileSync).toHaveBeenCalledTimes(1);
+      if (written) {
         expect(written.agentContext).toBeDefined();
         expect(written.agentContext.format).toBe('diagramflow-v1');
         expect(written.agentContext.nodeIndex).toHaveLength(2);
       }
-      // Regardless of mock depth, applyEdit must have been called
-      expect(applyEditMock).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -271,16 +271,12 @@ describe('DiagramService', () => {
       doc.groups = [{ id: 'g1', label: 'Group', x: 100, y: 100 }];
 
       let written: any;
-      vi.mocked(vscode.workspace.applyEdit).mockImplementation(async (edit: vscode.WorkspaceEdit) => {
-        const text = (edit as any)._edits?.[0]?.newText ?? '';
-        if (text) written = JSON.parse(text);
-        return true;
-      });
+      vi.mocked(nodeFs.writeFileSync).mockImplementation((_path, data) => { if (typeof data === 'string') written = JSON.parse(data); });
 
       const textDoc = makeMockTextDocument(JSON.stringify(doc));
       await service.moveNode('n1', { x: 350, y: 350 }, textDoc);
 
-      expect(vscode.workspace.applyEdit).toHaveBeenCalledTimes(1);
+      expect(nodeFs.writeFileSync).toHaveBeenCalledTimes(1);
       if (written) {
         expect(written.groups[0].x).toBeUndefined();
         expect(written.groups[0].y).toBeUndefined();
@@ -295,16 +291,12 @@ describe('DiagramService', () => {
       doc.groups = [{ id: 'g1', label: 'Group', x: 50, y: 50 }];
 
       let written: any;
-      vi.mocked(vscode.workspace.applyEdit).mockImplementation(async (edit: vscode.WorkspaceEdit) => {
-        const text = (edit as any)._edits?.[0]?.newText ?? '';
-        if (text) written = JSON.parse(text);
-        return true;
-      });
+      vi.mocked(nodeFs.writeFileSync).mockImplementation((_path, data) => { if (typeof data === 'string') written = JSON.parse(data); });
 
       const textDoc = makeMockTextDocument(JSON.stringify(doc));
       await service.moveNode('n1', { x: 200, y: 200 }, textDoc);
 
-      expect(vscode.workspace.applyEdit).toHaveBeenCalledTimes(1);
+      expect(nodeFs.writeFileSync).toHaveBeenCalledTimes(1);
       // Group position should remain untouched
       if (written) {
         expect(written.groups[0].x).toBe(50);
@@ -323,11 +315,7 @@ describe('DiagramService', () => {
       doc.groups = [{ id: 'g1', label: 'Group', x: 100, y: 100 }];
 
       let written: any;
-      vi.mocked(vscode.workspace.applyEdit).mockImplementation(async (edit: vscode.WorkspaceEdit) => {
-        const text = (edit as any)._edits?.[0]?.newText ?? '';
-        if (text) written = JSON.parse(text);
-        return true;
-      });
+      vi.mocked(nodeFs.writeFileSync).mockImplementation((_path, data) => { if (typeof data === 'string') written = JSON.parse(data); });
 
       const textDoc = makeMockTextDocument(JSON.stringify(doc));
       await service.moveNodes([
@@ -335,7 +323,7 @@ describe('DiagramService', () => {
         { id: 'n2', position: { x: 500, y: 500 } },
       ], textDoc);
 
-      expect(vscode.workspace.applyEdit).toHaveBeenCalledTimes(1);
+      expect(nodeFs.writeFileSync).toHaveBeenCalledTimes(1);
       if (written) {
         // g1's x/y should be cleared because n1 (in g1) was moved
         expect(written.groups[0].x).toBeUndefined();
@@ -344,3 +332,84 @@ describe('DiagramService', () => {
     });
   });
 });
+
+describe('sortNodes', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('sorts nodes and writes to file', async () => {
+    const service = new DiagramService();
+    const doc = makeValidDoc();
+    doc.nodes = [
+      { id: 'n1', label: 'A', x: 300, y: 100, width: 160, height: 48, shape: 'rectangle', color: 'default', pinned: false },
+      { id: 'n2', label: 'B', x: 100, y: 100, width: 160, height: 48, shape: 'rectangle', color: 'default', pinned: false },
+    ];
+    const textDoc = makeMockTextDocument(JSON.stringify(doc));
+    service.setActiveDocument(textDoc);
+
+    let written: any;
+    vi.mocked(nodeFs.writeFileSync).mockImplementation((_path, data) => { if (typeof data === 'string') written = JSON.parse(data); });
+
+    await service.sortNodes(undefined, textDoc);
+
+    expect(nodeFs.writeFileSync).toHaveBeenCalledTimes(1);
+    if (written) {
+      // TB sort: both nodes at y=100, sorted by x: n2 (x=100) before n1 (x=300)
+      expect(written.nodes[0].id).toBe('n2');
+      expect(written.nodes[1].id).toBe('n1');
+      expect(written.meta.layoutDirection).toBe('TB');
+    }
+  });
+
+  it('does nothing when no active document', async () => {
+    const service2 = new DiagramService();
+    await service2.sortNodes();
+    expect(nodeFs.writeFileSync).not.toHaveBeenCalled();
+  });
+});
+
+describe('applySemanticOps — sort_nodes skips partial layout', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('nodes placed at origin by sort are NOT re-positioned by partial layout engine', async () => {
+    const service = new DiagramService();
+    const doc = makeValidDoc();
+    // Two unpinned nodes at origin — normally partial layout would reposition them via Dagre.
+    // After sort, the first grid slot is at (0,0). Without the fix, applyPartialLayout
+    // would see that node and override it with a Dagre position.
+    doc.nodes = [
+      { id: 'n1', label: 'Alpha', x: 0, y: 0, width: 160, height: 48, shape: 'rectangle', color: 'default', pinned: false },
+      { id: 'n2', label: 'Beta', x: 10, y: 0, width: 160, height: 48, shape: 'rectangle', color: 'default', pinned: false },
+    ];
+    const textDoc = makeMockTextDocument(JSON.stringify(doc));
+
+    let written: any;
+    vi.mocked(nodeFs.writeFileSync).mockImplementation((_path, data) => { if (typeof data === 'string') written = JSON.parse(data); });
+
+    const result = await service.applySemanticOps(
+      [{ op: 'sort_nodes', direction: 'LR' }],
+      textDoc,
+    );
+
+    expect(result.success).toBe(true);
+    if (written) {
+      // Sort LR: n1 (x=0) first, n2 (x=10) second.
+      // Grid places n1 at (0,0) and n2 at (0, stepH) since LR uses column-major.
+      // applyPartialLayout must NOT have re-positioned n1 (it sits at 0,0 after sort).
+      const n1 = written.nodes.find((n: { id: string }) => n.id === 'n1');
+      const n2 = written.nodes.find((n: { id: string }) => n.id === 'n2');
+      // n1 remains at the sort-assigned position (0,0)
+      expect(n1.x).toBe(0);
+      expect(n1.y).toBe(0);
+      // n2 is placed below n1 in LR layout
+      expect(n2.x).toBe(0);
+      expect(n2.y).toBeGreaterThan(0);
+      // meta.layoutDirection must be persisted
+      expect(written.meta.layoutDirection).toBe('LR');
+    }
+  });
+});
+

@@ -114,33 +114,10 @@ Spec:
 ## LLM / Agent Context Enrichment Ideas
 
 > Research question: *What additional information can be stored in the diagram so an LLM agent understands the project architecture more accurately and makes better decisions?*
+>
+> **Implemented and removed from this list:** Semantic Node Type (`type`), C4 Abstraction Level (`abstractionLevel`), Edge Protocol + DataTypes, Node Lifecycle Status via `properties.status`, Diagram description via `meta.description`, Node security classification and deployment environment, glossary, tags, insights.
 
-### 10. Semantic Node Type Tags
-**Priority: High**
-Assign each node a machine-readable semantic type (`service`, `database`, `queue`, `ui`, `gateway`, `cache`, `worker`, `external`) stored in `DiagramNode.nodeType`. An LLM can then reason about architecture patterns (e.g., "no caching layer between gateway and DB") without parsing free-text labels.
-
-Spec:
-- Add optional `nodeType?: string` to `DiagramNode` and the JSON schema
-- Surface as a dropdown in the PropertiesPanel (well-known types + free text)
-- Include in `agentContext.nodeIndex` entries
-- Add `nodeType` to `diagramflow_addNodes` / `diagramflow_updateNodes` LM tool schemas
-- Extend `generateAgentContext` to group nodes by type in the summary
-
----
-
-### 11. C4 Architecture Level Classification
-**Priority: Medium**
-The C4 model (Context → Container → Component → Code) is the standard scope hierarchy. Tagging nodes with their C4 level lets the LLM know whether `AuthService` is a whole microservice container or an internal module.
-
-Spec:
-- Add optional `c4Level?: 'context' | 'container' | 'component' | 'code'` to `DiagramNode`
-- Render as a small badge on the node (coloured pill)
-- Include in `agentContext.summary` as a breakdown by level
-- LM tool schemas updated to accept `c4Level`
-
----
-
-### 12. Technology / Stack Metadata
+### 10. Technology / Stack Metadata
 **Priority: Medium**
 Knowing that `AuthService` is `Go` and `Frontend` is `React/TypeScript` is critical context for agents writing code. Free-text `notes` is lossy; a structured `tech` field is precise.
 
@@ -152,56 +129,19 @@ Spec:
 
 ---
 
-### 13. Source Code Path Linking
+### 11. Source Code Path Linking (VS Code Command)
 **Priority: Medium**
-When an LLM agent traces an issue, it needs to jump from a diagram node to actual source files. Linking a node to a workspace-relative glob pattern makes this trivial.
+NodeProperties already has `repo`, `openapi`, and `adr` for documentation linking. The missing piece is a VS Code command that opens the linked resource directly from the diagram.
 
-Spec:
-- Add optional `sourcePath?: string` to `DiagramNode` (e.g. `"src/auth/**"`, `"packages/gateway/src/index.ts"`)
-- Register VS Code command `diagramflow.openNodeSource` that opens the linked path
+Spec (remaining work):
+- Add optional `sourcePath?: string` to `NodeProperties` (workspace-relative glob, e.g. `"src/auth/**"`)
+- Register VS Code command `diagramflow.openNodeSource` that opens the linked path via `vscode.workspace.openTextDocument` or `vscode.env.openExternal`
 - Show "Open Source" in the NodeToolbar when `sourcePath` is set
-- Include paths in `agentContext.nodeIndex` so LLM agents can cite them directly
+- Include source paths in `agentContext.nodeIndex` so LLM agents can cite them
 
 ---
 
-### 14. Edge Semantics (Protocol / Data Flow)
-**Priority: Medium**
-Edges currently only carry style/arrow/label. Knowing *how* nodes communicate (sync HTTP, async Kafka event, SQL query, gRPC) enables the LLM to reason about latency, failure modes, and coupling.
-
-Spec:
-- Add optional `protocol?: string` to `DiagramEdge` (e.g. `"HTTP"`, `"gRPC"`, `"Kafka"`, `"SQL"`, `"WebSocket"`)
-- Show protocol as a small badge on the edge midpoint
-- Include in `agentContext.edgeIndex[].protocol`
-- PropertiesPanel edge section: protocol dropdown + free-text fallback
-
----
-
-### 15. Node Lifecycle Status
-**Priority: Low**
-Architecture diagrams go stale. Tagging nodes with their lifecycle status (`planned`, `in-progress`, `stable`, `deprecated`, `external`) helps both humans and LLMs distinguish real vs aspirational components.
-
-Spec:
-- Add optional `status?: 'planned' | 'in-progress' | 'stable' | 'deprecated' | 'external'` to `DiagramNode`
-- Render as visual indicator (dimmed opacity for deprecated, dashed border for planned)
-- Include in `agentContext.nodeIndex[].status`
-- LM tool schemas updated accordingly
-
----
-
-### 16. Diagram-Level Metadata (Scope, Owner, Version)
-**Priority: Low**
-Richer `meta` fields give the LLM context *before* it reads any nodes — the who/what/why of the diagram.
-
-Spec:
-- Add `meta.description?: string` — author-written paragraph describing the diagram scope
-- Add `meta.team?: string` — owning team name
-- Add `meta.docVersion?: string` — semantic version of the diagram document
-- Include all fields at the top of `agentContext.summary`
-- Expose via a "Diagram Properties" panel or settings command
-
----
-
-### 17. Topology Hints for LLM (Entry Points, Critical Paths)
+### 12. Topology Hints for LLM (Entry Points, Critical Paths)
 **Priority: Low**
 Surface structural insights — entry points (nodes with no inbound edges), leaf nodes, and longest directed paths — directly in `agentContext` so the LLM knows where to focus in large diagrams.
 
@@ -212,6 +152,68 @@ Spec:
   - `longestPath`: sequence of node IDs on the longest directed path
 - Include as a `topology` block in `agentContext`
 - No UI required — purely consumed by LLM tool callers
+
+---
+
+### 13. Diagram-Level Team and Version Metadata
+**Priority: Low**
+`meta.description` and `meta.abstractionLevel` are implemented. The remaining fields from the original idea are `meta.team` (owning team) and `meta.docVersion` (semantic version of the diagram). These give the LLM context before it reads any nodes.
+
+Spec:
+- Add `meta.team?: string` — owning team name (e.g. `"Platform Squad"`)
+- Add `meta.docVersion?: string` — semantic version of the diagram document (e.g. `"2.1.0"`)
+- Include at the top of `agentContext.summary`
+- Expose via a "Diagram Properties" settings command or meta editor
+
+---
+
+### 14. Runtime Scenario Documentation
+**Priority: Medium**
+Static diagrams show structure but not behavior. Annotating key runtime scenarios (user login flow, payment processing, error recovery) directly in the diagram metadata lets the LLM understand how components collaborate without reading source code.
+
+Research source: Arc42 section 6 (Runtime View) — documents behavior as use-case scenarios.
+
+Spec:
+- Add `meta.scenarios?: { name: string; description: string; participants: string[] }[]`
+- Each scenario names the nodes involved and describes the interaction in plain text
+- Include in `agentContext` as a `## Key Scenarios` section
+- UI: a collapsible "scenarios" editor in the Diagram Properties panel
+
+---
+
+### 15. Change Volatility Tagging
+**Priority: Low**
+When an LLM agent proposes changes, it needs to know what's stable (shared infrastructure, public APIs) vs experimental (new features) to avoid breaking things. A `volatility` tag on nodes encodes this intent.
+
+Spec:
+- Add optional `volatility?: 'stable' | 'experimental' | 'legacy'` to `DiagramNode`
+- Render as a subtle visual modifier (dimmed border for legacy, pulse animation for experimental)
+- Include in `agentContext.nodeIndex[].volatility`
+- LM tool schemas updated: `diagramflow_addNodes`, `diagramflow_updateNodes`
+
+---
+
+### 16. Diagram Staleness Tracking
+**Priority: Low**
+Architecture diagrams go stale quickly after code changes. Storing a `meta.lastValidated` date and surfacing staleness warnings helps the LLM know whether to trust the context.
+
+Spec:
+- Add `meta.lastValidated?: string` (ISO 8601 date) to `DiagramMeta`
+- Register VS Code command `DiagramFlow: Mark as Validated` to set this date
+- Show a warning banner in the webview if `lastValidated` is older than 30 days
+- Include `lastValidated` in `agentContext.summary` preamble
+
+---
+
+### 17. Cross-Diagram References (Linked Sub-Diagrams)
+**Priority: Low**
+For large systems, a single `.diagram` file becomes unmanageable. Linking a node to a more-detailed `.diagram` file (drill-down) allows LLM agents to traverse the architecture hierarchically without loading all diagrams simultaneously.
+
+Spec:
+- Add optional `linkedDiagram?: string` to `DiagramNode` (workspace-relative path)
+- Show a "drill-down" icon on nodes with a linked diagram
+- VS Code command `diagramflow.openLinkedDiagram` to navigate to the linked file
+- Include in `agentContext.nodeIndex[].linkedDiagram` so LLM tools can load sub-diagrams
 
 ---
 

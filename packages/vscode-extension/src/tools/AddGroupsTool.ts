@@ -1,8 +1,11 @@
 import * as vscode from 'vscode';
 import type { DiagramService } from '../DiagramService';
 import type { NodeColor } from '../types/DiagramDocument';
+import { openDiagramDocument, fileNameFromPath } from './toolHelpers';
 
 interface AddGroupsInput {
+  /** Absolute path to the .diagram file to modify. */
+  filePath: string;
   groups: {
     label: string;
     color?: string;
@@ -18,8 +21,9 @@ export class AddGroupsTool implements vscode.LanguageModelTool<AddGroupsInput> {
   ) {
     const count = options.input.groups.length;
     const labels = options.input.groups.map((g) => g.label).join(', ');
+    const file = fileNameFromPath(options.input.filePath);
     return {
-      invocationMessage: `Adding ${count} group(s): ${labels}`,
+      invocationMessage: `Adding ${count} group(s) to ${file}: ${labels}`,
       confirmationMessages: {
         title: 'Add diagram groups',
         message: new vscode.MarkdownString(
@@ -33,6 +37,13 @@ export class AddGroupsTool implements vscode.LanguageModelTool<AddGroupsInput> {
     options: vscode.LanguageModelToolInvocationOptions<AddGroupsInput>,
     _token: vscode.CancellationToken,
   ): Promise<vscode.LanguageModelToolResult> {
+    const opened = await openDiagramDocument(options.input.filePath);
+    if ('error' in opened) {
+      return new vscode.LanguageModelToolResult([
+        new vscode.LanguageModelTextPart(opened.error),
+      ]);
+    }
+
     const ops = options.input.groups.map((g) => ({
       op: 'add_group' as const,
       group: {
@@ -41,7 +52,7 @@ export class AddGroupsTool implements vscode.LanguageModelTool<AddGroupsInput> {
       },
     }));
 
-    const result = await this.diagramService.applySemanticOps(ops);
+    const result = await this.diagramService.applySemanticOps(ops, opened.doc);
 
     if (!result.success) {
       return new vscode.LanguageModelToolResult([
@@ -49,7 +60,7 @@ export class AddGroupsTool implements vscode.LanguageModelTool<AddGroupsInput> {
       ]);
     }
 
-    const doc = this.diagramService.parseDocument();
+    const doc = this.diagramService.parseDocument(opened.doc);
     const addedGroups = doc?.groups?.slice(-options.input.groups.length) ?? [];
     return new vscode.LanguageModelToolResult([
       new vscode.LanguageModelTextPart(

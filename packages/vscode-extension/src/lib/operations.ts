@@ -404,6 +404,8 @@ function sortNodes(
   groupId?: string,
 ): OpResult {
   const modified = structuredClone(doc);
+  // Persist the direction so the UI reflects the chosen sort direction after document reload.
+  modified.meta.layoutDirection = direction;
 
   if (groupId) {
     // Sort only nodes inside the specified group; reposition in reading order.

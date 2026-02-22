@@ -1,7 +1,10 @@
 import * as vscode from 'vscode';
 import type { DiagramService } from '../DiagramService';
+import { openDiagramDocument, fileNameFromPath } from './toolHelpers';
 
 interface RemoveEdgesInput {
+  /** Absolute path to the .diagram file to modify. */
+  filePath: string;
   edgeIds: string[];
 }
 
@@ -12,8 +15,9 @@ export class RemoveEdgesTool implements vscode.LanguageModelTool<RemoveEdgesInpu
     options: vscode.LanguageModelToolInvocationPrepareOptions<RemoveEdgesInput>,
     _token: vscode.CancellationToken,
   ) {
+    const file = fileNameFromPath(options.input.filePath);
     return {
-      invocationMessage: `Removing ${options.input.edgeIds.length} edge(s)...`,
+      invocationMessage: `Removing ${options.input.edgeIds.length} edge(s) from ${file}...`,
       confirmationMessages: {
         title: 'Remove diagram edges',
         message: new vscode.MarkdownString(
@@ -27,12 +31,19 @@ export class RemoveEdgesTool implements vscode.LanguageModelTool<RemoveEdgesInpu
     options: vscode.LanguageModelToolInvocationOptions<RemoveEdgesInput>,
     _token: vscode.CancellationToken,
   ): Promise<vscode.LanguageModelToolResult> {
+    const opened = await openDiagramDocument(options.input.filePath);
+    if ('error' in opened) {
+      return new vscode.LanguageModelToolResult([
+        new vscode.LanguageModelTextPart(opened.error),
+      ]);
+    }
+
     const ops = options.input.edgeIds.map((id) => ({
       op: 'remove_edge' as const,
       id,
     }));
 
-    const result = await this.diagramService.applySemanticOps(ops);
+    const result = await this.diagramService.applySemanticOps(ops, opened.doc);
 
     return new vscode.LanguageModelToolResult([
       new vscode.LanguageModelTextPart(

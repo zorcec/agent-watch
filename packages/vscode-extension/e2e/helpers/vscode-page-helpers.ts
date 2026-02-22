@@ -162,23 +162,45 @@ export async function getEditorContent(page: Page): Promise<string> {
 }
 
 /**
- * Executes a VS Code command via the command palette
+ * Executes a VS Code command via the command palette.
+ *
+ * Critical: Ctrl+Shift+P opens the quick-input with a ">" mode prefix.
+ * Calling fill(command) without that ">" switches the palette back to
+ * file-search mode (placeholder "Search files by name"), which makes
+ * command filtering fail.  We therefore use Ctrl+P + fill('> '+command)
+ * to explicitly stay in command mode.
  */
 export async function executeCommand(page: Page, command: string): Promise<void> {
 	await safePageOp(page, async () => {
-		// Dismiss any existing dialogs first
+		// Dismiss any existing dialogs / quick-inputs first
 		await dismissTrustDialog(page);
+		await page.keyboard.press('Escape');
+		await page.waitForTimeout(300);
 
-		await page.keyboard.press('Control+Shift+P');
-		await page.waitForTimeout(1000);
+		// Open the file quick-open; we'll switch to command mode via ">"
+		await page.keyboard.press('Control+P');
+		await page.waitForTimeout(600);
 
 		const quickInput = page.locator('.quick-input-widget input[type="text"]');
 		await quickInput.waitFor({ state: 'visible', timeout: 5000 });
-		await quickInput.fill(command);
+
+		// Prefix ">" puts the palette into command mode, then the command name filters it
+		await quickInput.fill(`> ${command}`);
 		await page.waitForTimeout(1000);
 
-		// Wait for the filtered results to show and press Enter
-		await page.keyboard.press('Enter');
-		await page.waitForTimeout(2000);
+		// Try to click the first matching item in the filtered list
+		const shortTitle = command.split(':').pop()?.trim() ?? command;
+		const matchingItem = page.locator(`.quick-input-list .monaco-list-row`).filter({
+			hasText: shortTitle,
+		}).first();
+
+		const itemVisible = await matchingItem.isVisible({ timeout: 2000 }).catch(() => false);
+		if (itemVisible) {
+			await matchingItem.click();
+		} else {
+			await page.keyboard.press('Enter');
+		}
+
+		await page.waitForTimeout(1500);
 	}, undefined);
 }

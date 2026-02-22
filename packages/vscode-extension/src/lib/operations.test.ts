@@ -941,3 +941,38 @@ describe('applyOps - sort_nodes repositioning', () => {
     expect(b.y).toBe(200 + STEP_H);
   });
 });
+
+// ---------------------------------------------------------------------------
+// sort_nodes — meta.layoutDirection is persisted
+// ---------------------------------------------------------------------------
+
+describe('applyOps - sort_nodes persists meta.layoutDirection', () => {
+  it('persists the sort direction to meta.layoutDirection', () => {
+    const doc = makeBaseDoc();
+    // meta.layoutDirection is undefined initially
+    const result = applyOps(doc, [{ op: 'sort_nodes', direction: 'LR' }], mockId);
+    expect(result.success).toBe(true);
+    expect(result.document!.meta.layoutDirection).toBe('LR');
+  });
+
+  it('overwrites existing meta.layoutDirection on sort', () => {
+    const doc = makeBaseDoc();
+    doc.meta.layoutDirection = 'TB';
+    const result = applyOps(doc, [{ op: 'sort_nodes', direction: 'RL' }], mockId);
+    expect(result.success).toBe(true);
+    expect(result.document!.meta.layoutDirection).toBe('RL');
+  });
+
+  it('group-scoped sort also persists direction to meta', () => {
+    const doc = makeDocWithGroups();
+    const result = applyOps(doc, [{ op: 'sort_nodes', direction: 'BT', groupId: 'g1' }], mockId);
+    expect(result.success).toBe(true);
+    expect(result.document!.meta.layoutDirection).toBe('BT');
+  });
+
+  it('does not mutate original document meta', () => {
+    const doc = makeBaseDoc();
+    applyOps(doc, [{ op: 'sort_nodes', direction: 'LR' }], mockId);
+    expect(doc.meta.layoutDirection).toBeUndefined();
+  });
+});

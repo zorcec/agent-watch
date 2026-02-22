@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as nodeFs from 'fs';
 import type { DiagramDocument, LayoutDirection } from './types/DiagramDocument';
 import { GROUP_PADDING, GROUP_LABEL_HEIGHT } from './types/DiagramDocument';
 import type { SemanticOp } from './types/operations';
@@ -86,8 +87,13 @@ export class DiagramService {
     }
 
     let modified = result.document;
-    modified = applyPartialLayout(modified);
+    // Skip partial layout after sort_nodes — sort has already positioned all nodes explicitly.
+    const hasSortOp = ops.some((op) => op.op === 'sort_nodes');
+    if (!hasSortOp) {
+      modified = applyPartialLayout(modified);
+    }
 
+    this.stampModified(modified);
     this.recordHistory(current);
     return writeDocumentToFile(target, modified);
   }
@@ -351,19 +357,33 @@ function computeGroupOrigin(doc: DiagramDocument, groupId: string): { x: number;
   };
 }
 
+
 async function writeDocumentToFile(
   target: vscode.TextDocument,
   doc: DiagramDocument,
 ): Promise<{ success: boolean; error?: string }> {
   const newText = JSON.stringify(doc, null, 2);
-  const edit = new vscode.WorkspaceEdit();
-  edit.replace(
-    target.uri,
-    new vscode.Range(0, 0, target.lineCount, 0),
-    newText,
-  );
-  const applied = await vscode.workspace.applyEdit(edit);
-  return applied
-    ? { success: true }
-    : { success: false, error: 'Failed to apply workspace edit' };
+
+  // Write directly to the filesystem using Node.js — most reliable for local files.
+  // VS Code detects the change and reloads the text document buffer.
+  try {
+    const fsPath = target.uri.fsPath;
+    nodeFs.writeFileSync(fsPath, newText, 'utf-8');
+    return { success: true };
+  } catch (err) {
+    console.error('[DiagramFlow] writeDocumentToFile native fs failed, using workspace edit:', err);
+    // Fallback to VS Code workspace edit + save for virtual filesystems.
+    const edit = new vscode.WorkspaceEdit();
+    edit.replace(
+      target.uri,
+      new vscode.Range(0, 0, target.lineCount, 0),
+      newText,
+    );
+    const applied = await vscode.workspace.applyEdit(edit);
+    if (!applied) {
+      return { success: false, error: 'Failed to apply workspace edit' };
+    }
+    await target.save();
+    return { success: true };
+  }
 }

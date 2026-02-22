@@ -1,8 +1,11 @@
 import * as vscode from 'vscode';
 import type { DiagramService } from '../DiagramService';
 import type { EdgeStyle, ArrowType } from '../types/DiagramDocument';
+import { openDiagramDocument, fileNameFromPath } from './toolHelpers';
 
 interface AddEdgesInput {
+  /** Absolute path to the .diagram file to modify. */
+  filePath: string;
   edges: {
     source: string;
     target: string;
@@ -21,8 +24,9 @@ export class AddEdgesTool implements vscode.LanguageModelTool<AddEdgesInput> {
     _token: vscode.CancellationToken,
   ) {
     const count = options.input.edges.length;
+    const file = fileNameFromPath(options.input.filePath);
     return {
-      invocationMessage: `Adding ${count} edge(s)...`,
+      invocationMessage: `Adding ${count} edge(s) to ${file}...`,
       confirmationMessages: {
         title: 'Add diagram edges',
         message: new vscode.MarkdownString(
@@ -36,6 +40,13 @@ export class AddEdgesTool implements vscode.LanguageModelTool<AddEdgesInput> {
     options: vscode.LanguageModelToolInvocationOptions<AddEdgesInput>,
     _token: vscode.CancellationToken,
   ): Promise<vscode.LanguageModelToolResult> {
+    const opened = await openDiagramDocument(options.input.filePath);
+    if ('error' in opened) {
+      return new vscode.LanguageModelToolResult([
+        new vscode.LanguageModelTextPart(opened.error),
+      ]);
+    }
+
     const ops = options.input.edges.map((e) => ({
       op: 'add_edge' as const,
       edge: {
@@ -48,7 +59,7 @@ export class AddEdgesTool implements vscode.LanguageModelTool<AddEdgesInput> {
       },
     }));
 
-    const result = await this.diagramService.applySemanticOps(ops);
+    const result = await this.diagramService.applySemanticOps(ops, opened.doc);
 
     return new vscode.LanguageModelToolResult([
       new vscode.LanguageModelTextPart(

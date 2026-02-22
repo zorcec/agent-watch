@@ -1,0 +1,50 @@
+{
+  "meta": {
+    "version": "1.0",
+    "title": "Sort Test Diagram",
+    "created": "2025-01-01T00:00:00Z",
+    "modified": "2025-01-01T00:00:00Z"
+  },
+  "nodes": [
+    {
+      "id": "n1",
+      "label": "Right Node",
+      "shape": "rectangle",
+      "color": "blue",
+      "x": 400,
+      "y": 100,
+      "width": 160,
+      "height": 48,
+      "pinned": false
+    },
+    {
+      "id": "n2",
+      "label": "Bottom Left",
+      "shape": "rectangle",
+      "color": "default",
+      "x": 100,
+      "y": 200,
+      "width": 160,
+      "height": 48,
+      "pinned": false
+    },
+    {
+      "id": "n3",
+      "label": "Middle Node",
+      "shape": "rectangle",
+      "color": "green",
+      "x": 300,
+      "y": 100,
+      "width": 160,
+      "height": 48,
+      "pinned": false
+    }
+  ],
+  "edges": [],
+  "groups": [],
+  "viewport": {
+    "x": 0,
+    "y": 0,
+    "zoom": 1
+  }
+}

@@ -10,6 +10,9 @@ import { UpdateNodesTool } from './UpdateNodesTool';
 import { AddEdgesTool } from './AddEdgesTool';
 import { RemoveEdgesTool } from './RemoveEdgesTool';
 import { UpdateEdgesTool } from './UpdateEdgesTool';
+import { AddGroupsTool } from './AddGroupsTool';
+import { RemoveGroupsTool } from './RemoveGroupsTool';
+import { UpdateGroupsTool } from './UpdateGroupsTool';
 import { registerDiagramTools } from './index';
 import type { DiagramService } from '../DiagramService';
 import type { DiagramDocument } from '../types/DiagramDocument';
@@ -185,30 +188,63 @@ describe('GetDiagramTool', () => {
     const parsed = JSON.parse(resultText(result));
     expect(parsed.title).toBe('');
   });
+
+  it('omits style from compact output when edge style is solid', async () => {
+    const docWithSolidEdge = makeDoc();
+    docWithSolidEdge.edges[0] = { ...docWithSolidEdge.edges[0], style: 'solid' };
+    const svc = makeMockDiagramService({
+      parseDocument: vi.fn().mockReturnValue(docWithSolidEdge),
+    });
+    const tool = new GetDiagramTool(svc);
+
+    const result = await tool.invoke(
+      { input: { filePath: TEST_FILE_PATH } } as any,
+      mockToken,
+    );
+    const parsed = JSON.parse(resultText(result));
+
+    expect(parsed.edges[0].style).toBeUndefined();
+  });
 });
 
 describe('AddNodesTool', () => {
-  it('prepareInvocation shows node count and labels', async () => {
+  it('prepareInvocation shows node count, labels, and filename', async () => {
     const svc = makeMockDiagramService();
     const tool = new AddNodesTool(svc);
 
     const result = await tool.prepareInvocation(
-      { input: { nodes: [{ label: 'Foo' }, { label: 'Bar' }] } } as any,
+      { input: { filePath: TEST_FILE_PATH, nodes: [{ label: 'Foo' }, { label: 'Bar' }] } } as any,
       mockToken,
     );
 
     expect(result?.invocationMessage).toContain('2');
     expect(result?.invocationMessage).toContain('Foo');
     expect(result?.invocationMessage).toContain('Bar');
+    expect(result?.invocationMessage).toContain('test.diagram');
   });
 
-  it('invokes applySemanticOps with add_node ops', async () => {
+  it('returns error when file cannot be opened', async () => {
+    vi.mocked(vscode.workspace.openTextDocument).mockRejectedValueOnce(new Error('not found'));
+    const svc = makeMockDiagramService();
+    const tool = new AddNodesTool(svc);
+
+    const result = await tool.invoke(
+      { input: { filePath: '/bad/path.diagram', nodes: [{ label: 'A' }] } } as any,
+      mockToken,
+    );
+
+    expect(resultText(result)).toContain('Cannot open file');
+    expect(svc.applySemanticOps).not.toHaveBeenCalled();
+  });
+
+  it('invokes applySemanticOps with add_node ops and the opened document', async () => {
     const svc = makeMockDiagramService();
     const tool = new AddNodesTool(svc);
 
     await tool.invoke(
       {
         input: {
+          filePath: TEST_FILE_PATH,
           nodes: [
             { label: 'A', shape: 'diamond', color: 'blue' },
             { label: 'B', notes: 'some note', group: 'g1' },
@@ -229,6 +265,8 @@ describe('AddNodesTool', () => {
       op: 'add_node',
       node: { label: 'B', notes: 'some note', group: 'g1' },
     });
+    // Second arg must be the opened TextDocument
+    expect(vi.mocked(svc.applySemanticOps).mock.calls[0][1]).toBeDefined();
   });
 
   it('returns success message with added node IDs', async () => {
@@ -236,7 +274,7 @@ describe('AddNodesTool', () => {
     const tool = new AddNodesTool(svc);
 
     const result = await tool.invoke(
-      { input: { nodes: [{ label: 'A' }] } } as any,
+      { input: { filePath: TEST_FILE_PATH, nodes: [{ label: 'A' }] } } as any,
       mockToken,
     );
 
@@ -253,7 +291,7 @@ describe('AddNodesTool', () => {
     const tool = new AddNodesTool(svc);
 
     const result = await tool.invoke(
-      { input: { nodes: [{ label: 'A' }] } } as any,
+      { input: { filePath: TEST_FILE_PATH, nodes: [{ label: 'A' }] } } as any,
       mockToken,
     );
 
@@ -263,24 +301,39 @@ describe('AddNodesTool', () => {
 });
 
 describe('RemoveNodesTool', () => {
-  it('prepareInvocation shows count', async () => {
+  it('prepareInvocation shows count and filename', async () => {
     const svc = makeMockDiagramService();
     const tool = new RemoveNodesTool(svc);
 
     const result = await tool.prepareInvocation(
-      { input: { nodeIds: ['n1', 'n2'] } } as any,
+      { input: { filePath: TEST_FILE_PATH, nodeIds: ['n1', 'n2'] } } as any,
       mockToken,
     );
 
     expect(result?.invocationMessage).toContain('2');
+    expect(result?.invocationMessage).toContain('test.diagram');
   });
 
-  it('invokes remove_node ops', async () => {
+  it('returns error when file cannot be opened', async () => {
+    vi.mocked(vscode.workspace.openTextDocument).mockRejectedValueOnce(new Error('not found'));
+    const svc = makeMockDiagramService();
+    const tool = new RemoveNodesTool(svc);
+
+    const result = await tool.invoke(
+      { input: { filePath: '/bad/path.diagram', nodeIds: ['n1'] } } as any,
+      mockToken,
+    );
+
+    expect(resultText(result)).toContain('Cannot open file');
+    expect(svc.applySemanticOps).not.toHaveBeenCalled();
+  });
+
+  it('invokes remove_node ops with the opened document', async () => {
     const svc = makeMockDiagramService();
     const tool = new RemoveNodesTool(svc);
 
     await tool.invoke(
-      { input: { nodeIds: ['n1', 'n2'] } } as any,
+      { input: { filePath: TEST_FILE_PATH, nodeIds: ['n1', 'n2'] } } as any,
       mockToken,
     );
 
@@ -289,6 +342,7 @@ describe('RemoveNodesTool', () => {
       { op: 'remove_node', id: 'n1' },
       { op: 'remove_node', id: 'n2' },
     ]);
+    expect(vi.mocked(svc.applySemanticOps).mock.calls[0][1]).toBeDefined();
   });
 
   it('returns failure message on error', async () => {
@@ -300,7 +354,7 @@ describe('RemoveNodesTool', () => {
     const tool = new RemoveNodesTool(svc);
 
     const result = await tool.invoke(
-      { input: { nodeIds: ['n99'] } } as any,
+      { input: { filePath: TEST_FILE_PATH, nodeIds: ['n99'] } } as any,
       mockToken,
     );
 
@@ -309,13 +363,14 @@ describe('RemoveNodesTool', () => {
 });
 
 describe('UpdateNodesTool', () => {
-  it('prepareInvocation shows count', async () => {
+  it('prepareInvocation shows count and filename', async () => {
     const svc = makeMockDiagramService();
     const tool = new UpdateNodesTool(svc);
 
     const result = await tool.prepareInvocation(
       {
         input: {
+          filePath: TEST_FILE_PATH,
           updates: [
             { id: 'n1', label: 'New Label' },
             { id: 'n2', color: 'red' },
@@ -326,15 +381,31 @@ describe('UpdateNodesTool', () => {
     );
 
     expect(result?.invocationMessage).toContain('2');
+    expect(result?.invocationMessage).toContain('test.diagram');
   });
 
-  it('maps updates to update_node ops with proper casting', async () => {
+  it('returns error when file cannot be opened', async () => {
+    vi.mocked(vscode.workspace.openTextDocument).mockRejectedValueOnce(new Error('not found'));
+    const svc = makeMockDiagramService();
+    const tool = new UpdateNodesTool(svc);
+
+    const result = await tool.invoke(
+      { input: { filePath: '/bad/path.diagram', updates: [{ id: 'n1' }] } } as any,
+      mockToken,
+    );
+
+    expect(resultText(result)).toContain('Cannot open file');
+    expect(svc.applySemanticOps).not.toHaveBeenCalled();
+  });
+
+  it('maps updates to update_node ops with proper casting and passes the document', async () => {
     const svc = makeMockDiagramService();
     const tool = new UpdateNodesTool(svc);
 
     await tool.invoke(
       {
         input: {
+          filePath: TEST_FILE_PATH,
           updates: [
             {
               id: 'n1',
@@ -362,6 +433,7 @@ describe('UpdateNodesTool', () => {
         group: 'g1',
       },
     });
+    expect(vi.mocked(svc.applySemanticOps).mock.calls[0][1]).toBeDefined();
   });
 
   it('returns success message', async () => {
@@ -369,7 +441,7 @@ describe('UpdateNodesTool', () => {
     const tool = new UpdateNodesTool(svc);
 
     const result = await tool.invoke(
-      { input: { updates: [{ id: 'n1', label: 'X' }] } } as any,
+      { input: { filePath: TEST_FILE_PATH, updates: [{ id: 'n1', label: 'X' }] } } as any,
       mockToken,
     );
 
@@ -378,25 +450,41 @@ describe('UpdateNodesTool', () => {
 });
 
 describe('AddEdgesTool', () => {
-  it('prepareInvocation shows edge count', async () => {
+  it('prepareInvocation shows edge count and filename', async () => {
     const svc = makeMockDiagramService();
     const tool = new AddEdgesTool(svc);
 
     const result = await tool.prepareInvocation(
-      { input: { edges: [{ source: 'n1', target: 'n2' }] } } as any,
+      { input: { filePath: TEST_FILE_PATH, edges: [{ source: 'n1', target: 'n2' }] } } as any,
       mockToken,
     );
 
     expect(result?.invocationMessage).toContain('1');
+    expect(result?.invocationMessage).toContain('test.diagram');
   });
 
-  it('maps edges to add_edge ops with optional fields', async () => {
+  it('returns error when file cannot be opened', async () => {
+    vi.mocked(vscode.workspace.openTextDocument).mockRejectedValueOnce(new Error('not found'));
+    const svc = makeMockDiagramService();
+    const tool = new AddEdgesTool(svc);
+
+    const result = await tool.invoke(
+      { input: { filePath: '/bad/path.diagram', edges: [{ source: 'n1', target: 'n2' }] } } as any,
+      mockToken,
+    );
+
+    expect(resultText(result)).toContain('Cannot open file');
+    expect(svc.applySemanticOps).not.toHaveBeenCalled();
+  });
+
+  it('maps edges to add_edge ops with optional fields and passes the document', async () => {
     const svc = makeMockDiagramService();
     const tool = new AddEdgesTool(svc);
 
     await tool.invoke(
       {
         input: {
+          filePath: TEST_FILE_PATH,
           edges: [
             {
               source: 'n1',
@@ -424,6 +512,7 @@ describe('AddEdgesTool', () => {
         animated: true,
       },
     });
+    expect(vi.mocked(svc.applySemanticOps).mock.calls[0][1]).toBeDefined();
   });
 
   it('returns failure message on error', async () => {
@@ -435,7 +524,7 @@ describe('AddEdgesTool', () => {
     const tool = new AddEdgesTool(svc);
 
     const result = await tool.invoke(
-      { input: { edges: [{ source: 'n1', target: 'n99' }] } } as any,
+      { input: { filePath: TEST_FILE_PATH, edges: [{ source: 'n1', target: 'n99' }] } } as any,
       mockToken,
     );
 
@@ -444,24 +533,39 @@ describe('AddEdgesTool', () => {
 });
 
 describe('RemoveEdgesTool', () => {
-  it('prepareInvocation shows edge count', async () => {
+  it('prepareInvocation shows edge count and filename', async () => {
     const svc = makeMockDiagramService();
     const tool = new RemoveEdgesTool(svc);
 
     const result = await tool.prepareInvocation(
-      { input: { edgeIds: ['e1', 'e2'] } } as any,
+      { input: { filePath: TEST_FILE_PATH, edgeIds: ['e1', 'e2'] } } as any,
       mockToken,
     );
 
     expect(result?.invocationMessage).toContain('2');
+    expect(result?.invocationMessage).toContain('test.diagram');
   });
 
-  it('invokes remove_edge ops', async () => {
+  it('returns error when file cannot be opened', async () => {
+    vi.mocked(vscode.workspace.openTextDocument).mockRejectedValueOnce(new Error('not found'));
+    const svc = makeMockDiagramService();
+    const tool = new RemoveEdgesTool(svc);
+
+    const result = await tool.invoke(
+      { input: { filePath: '/bad/path.diagram', edgeIds: ['e1'] } } as any,
+      mockToken,
+    );
+
+    expect(resultText(result)).toContain('Cannot open file');
+    expect(svc.applySemanticOps).not.toHaveBeenCalled();
+  });
+
+  it('invokes remove_edge ops with the opened document', async () => {
     const svc = makeMockDiagramService();
     const tool = new RemoveEdgesTool(svc);
 
     await tool.invoke(
-      { input: { edgeIds: ['e1', 'e2'] } } as any,
+      { input: { filePath: TEST_FILE_PATH, edgeIds: ['e1', 'e2'] } } as any,
       mockToken,
     );
 
@@ -470,6 +574,7 @@ describe('RemoveEdgesTool', () => {
       { op: 'remove_edge', id: 'e1' },
       { op: 'remove_edge', id: 'e2' },
     ]);
+    expect(vi.mocked(svc.applySemanticOps).mock.calls[0][1]).toBeDefined();
   });
 
   it('returns success message', async () => {
@@ -477,34 +582,64 @@ describe('RemoveEdgesTool', () => {
     const tool = new RemoveEdgesTool(svc);
 
     const result = await tool.invoke(
-      { input: { edgeIds: ['e1'] } } as any,
+      { input: { filePath: TEST_FILE_PATH, edgeIds: ['e1'] } } as any,
       mockToken,
     );
 
     expect(resultText(result)).toContain('Removed 1 edge(s)');
   });
+
+  it('returns failure message on error', async () => {
+    const svc = makeMockDiagramService({
+      applySemanticOps: vi.fn().mockResolvedValue({ success: false, error: 'Edge not found' }),
+    });
+    const tool = new RemoveEdgesTool(svc);
+
+    const result = await tool.invoke(
+      { input: { filePath: TEST_FILE_PATH, edgeIds: ['bad-edge'] } } as any,
+      mockToken,
+    );
+
+    expect(resultText(result)).toContain('Failed');
+  });
 });
 
 describe('UpdateEdgesTool', () => {
-  it('prepareInvocation shows update count', async () => {
+  it('prepareInvocation shows update count and filename', async () => {
     const svc = makeMockDiagramService();
     const tool = new UpdateEdgesTool(svc);
 
     const result = await tool.prepareInvocation(
-      { input: { updates: [{ id: 'e1', label: 'x' }, { id: 'e2', style: 'dashed' }] } } as any,
+      { input: { filePath: TEST_FILE_PATH, updates: [{ id: 'e1', label: 'x' }, { id: 'e2', style: 'dashed' }] } } as any,
       mockToken,
     );
 
     expect(result?.invocationMessage).toContain('2');
+    expect(result?.invocationMessage).toContain('test.diagram');
   });
 
-  it('maps updates to update_edge ops', async () => {
+  it('returns error when file cannot be opened', async () => {
+    vi.mocked(vscode.workspace.openTextDocument).mockRejectedValueOnce(new Error('not found'));
+    const svc = makeMockDiagramService();
+    const tool = new UpdateEdgesTool(svc);
+
+    const result = await tool.invoke(
+      { input: { filePath: '/bad/path.diagram', updates: [{ id: 'e1' }] } } as any,
+      mockToken,
+    );
+
+    expect(resultText(result)).toContain('Cannot open file');
+    expect(svc.applySemanticOps).not.toHaveBeenCalled();
+  });
+
+  it('maps updates to update_edge ops and passes the document', async () => {
     const svc = makeMockDiagramService();
     const tool = new UpdateEdgesTool(svc);
 
     await tool.invoke(
       {
         input: {
+          filePath: TEST_FILE_PATH,
           updates: [
             {
               id: 'e1',
@@ -534,6 +669,7 @@ describe('UpdateEdgesTool', () => {
         target: 'n1',
       },
     });
+    expect(vi.mocked(svc.applySemanticOps).mock.calls[0][1]).toBeDefined();
   });
 
   it('returns failure on error', async () => {
@@ -545,7 +681,7 @@ describe('UpdateEdgesTool', () => {
     const tool = new UpdateEdgesTool(svc);
 
     const result = await tool.invoke(
-      { input: { updates: [{ id: 'e1', label: 'x' }] } } as any,
+      { input: { filePath: TEST_FILE_PATH, updates: [{ id: 'e1', label: 'x' }] } } as any,
       mockToken,
     );
 
@@ -724,6 +860,24 @@ describe('buildReadableText', () => {
     expect(text).toContain('Node A → Node B');
   });
 
+  it('includes meta description in fallback mode', () => {
+    const doc = makeDoc();
+    (doc.meta as any).description = 'Architecture overview for testing';
+
+    const text = buildReadableText(doc);
+
+    expect(text).toContain('Architecture overview for testing');
+  });
+
+  it('includes node notes in fallback mode', () => {
+    const doc = makeDoc();
+    (doc.nodes[0] as any).notes = 'Primary entry point';
+
+    const text = buildReadableText(doc);
+
+    expect(text).toContain('Primary entry point');
+  });
+
   it('includes edge label in fallback mode', () => {
     const doc = makeDoc();
 
@@ -740,6 +894,236 @@ describe('buildReadableText', () => {
     const text = buildReadableText(doc);
 
     expect(text).toContain('No nodes');
+  });
+
+  it('includes node properties (repo, team) when present in agentContext nodeIndex', () => {
+    const doc = makeDoc();
+    doc.agentContext = {
+      summary: 'Summary',
+      nodeIndex: [{
+        label: 'AuthService',
+        properties: { repo: 'github.com/org/svc', team: 'platform' },
+      }],
+      edgeIndex: [],
+      groupIndex: [],
+      generatedAt: new Date().toISOString(),
+    } as any;
+
+    const text = buildReadableText(doc);
+
+    expect(text).toContain('repo: github.com/org/svc');
+    expect(text).toContain('team: platform');
+  });
+});
+
+describe('AddGroupsTool', () => {
+  it('prepareInvocation shows group count, labels, and filename', async () => {
+    const svc = makeMockDiagramService();
+    const tool = new AddGroupsTool(svc);
+
+    const result = await tool.prepareInvocation(
+      { input: { filePath: TEST_FILE_PATH, groups: [{ label: 'Team A' }, { label: 'Team B' }] } } as any,
+      mockToken,
+    );
+
+    expect(result?.invocationMessage).toContain('2');
+    expect(result?.invocationMessage).toContain('test.diagram');
+    expect(result?.invocationMessage).toContain('Team A');
+  });
+
+  it('returns error when file cannot be opened', async () => {
+    vi.mocked(vscode.workspace.openTextDocument).mockRejectedValueOnce(new Error('not found'));
+    const svc = makeMockDiagramService();
+    const tool = new AddGroupsTool(svc);
+
+    const result = await tool.invoke(
+      { input: { filePath: '/bad/path.diagram', groups: [{ label: 'G1' }] } } as any,
+      mockToken,
+    );
+
+    expect(resultText(result)).toContain('Cannot open file');
+    expect(svc.applySemanticOps).not.toHaveBeenCalled();
+  });
+
+  it('maps groups to add_group ops and passes the document', async () => {
+    const svc = makeMockDiagramService();
+    const tool = new AddGroupsTool(svc);
+
+    await tool.invoke(
+      { input: { filePath: TEST_FILE_PATH, groups: [{ label: 'Infra', color: 'blue' }] } } as any,
+      mockToken,
+    );
+
+    const ops = vi.mocked(svc.applySemanticOps).mock.calls[0][0];
+    expect(ops[0]).toEqual({ op: 'add_group', group: { label: 'Infra', color: 'blue' } });
+    expect(vi.mocked(svc.applySemanticOps).mock.calls[0][1]).toBeDefined();
+  });
+
+  it('returns group IDs on success', async () => {
+    const svc = makeMockDiagramService();
+    const tool = new AddGroupsTool(svc);
+
+    const result = await tool.invoke(
+      { input: { filePath: TEST_FILE_PATH, groups: [{ label: 'G1' }] } } as any,
+      mockToken,
+    );
+
+    expect(resultText(result)).toContain('Added');
+  });
+
+  it('returns failure message on error', async () => {
+    const svc = makeMockDiagramService({
+      applySemanticOps: vi.fn().mockResolvedValue({ success: false, error: 'Oops' }),
+    });
+    const tool = new AddGroupsTool(svc);
+
+    const result = await tool.invoke(
+      { input: { filePath: TEST_FILE_PATH, groups: [{ label: 'G1' }] } } as any,
+      mockToken,
+    );
+
+    expect(resultText(result)).toContain('Failed');
+  });
+});
+
+describe('RemoveGroupsTool', () => {
+  it('prepareInvocation shows count and filename', async () => {
+    const svc = makeMockDiagramService();
+    const tool = new RemoveGroupsTool(svc);
+
+    const result = await tool.prepareInvocation(
+      { input: { filePath: TEST_FILE_PATH, groupIds: ['g1', 'g2', 'g3'] } } as any,
+      mockToken,
+    );
+
+    expect(result?.invocationMessage).toContain('3');
+    expect(result?.invocationMessage).toContain('test.diagram');
+  });
+
+  it('returns error when file cannot be opened', async () => {
+    vi.mocked(vscode.workspace.openTextDocument).mockRejectedValueOnce(new Error('not found'));
+    const svc = makeMockDiagramService();
+    const tool = new RemoveGroupsTool(svc);
+
+    const result = await tool.invoke(
+      { input: { filePath: '/bad/path.diagram', groupIds: ['g1'] } } as any,
+      mockToken,
+    );
+
+    expect(resultText(result)).toContain('Cannot open file');
+    expect(svc.applySemanticOps).not.toHaveBeenCalled();
+  });
+
+  it('maps groupIds to remove_group ops and passes the document', async () => {
+    const svc = makeMockDiagramService();
+    const tool = new RemoveGroupsTool(svc);
+
+    await tool.invoke(
+      { input: { filePath: TEST_FILE_PATH, groupIds: ['g1', 'g2'] } } as any,
+      mockToken,
+    );
+
+    const ops = vi.mocked(svc.applySemanticOps).mock.calls[0][0];
+    expect(ops).toEqual([
+      { op: 'remove_group', id: 'g1' },
+      { op: 'remove_group', id: 'g2' },
+    ]);
+    expect(vi.mocked(svc.applySemanticOps).mock.calls[0][1]).toBeDefined();
+  });
+
+  it('returns success message on success', async () => {
+    const svc = makeMockDiagramService();
+    const tool = new RemoveGroupsTool(svc);
+
+    const result = await tool.invoke(
+      { input: { filePath: TEST_FILE_PATH, groupIds: ['g1'] } } as any,
+      mockToken,
+    );
+
+    expect(resultText(result)).toContain('Removed');
+  });
+
+  it('returns failure message on error', async () => {
+    const svc = makeMockDiagramService({
+      applySemanticOps: vi.fn().mockResolvedValue({ success: false, error: 'Oops' }),
+    });
+    const tool = new RemoveGroupsTool(svc);
+
+    const result = await tool.invoke(
+      { input: { filePath: TEST_FILE_PATH, groupIds: ['g1'] } } as any,
+      mockToken,
+    );
+
+    expect(resultText(result)).toContain('Failed');
+  });
+});
+
+describe('UpdateGroupsTool', () => {
+  it('prepareInvocation shows update count and filename', async () => {
+    const svc = makeMockDiagramService();
+    const tool = new UpdateGroupsTool(svc);
+
+    const result = await tool.prepareInvocation(
+      { input: { filePath: TEST_FILE_PATH, updates: [{ id: 'g1', label: 'New' }] } } as any,
+      mockToken,
+    );
+
+    expect(result?.invocationMessage).toContain('1');
+    expect(result?.invocationMessage).toContain('test.diagram');
+  });
+
+  it('returns error when file cannot be opened', async () => {
+    vi.mocked(vscode.workspace.openTextDocument).mockRejectedValueOnce(new Error('not found'));
+    const svc = makeMockDiagramService();
+    const tool = new UpdateGroupsTool(svc);
+
+    const result = await tool.invoke(
+      { input: { filePath: '/bad/path.diagram', updates: [{ id: 'g1', label: 'X' }] } } as any,
+      mockToken,
+    );
+
+    expect(resultText(result)).toContain('Cannot open file');
+    expect(svc.applySemanticOps).not.toHaveBeenCalled();
+  });
+
+  it('maps updates to update_group ops and passes the document', async () => {
+    const svc = makeMockDiagramService();
+    const tool = new UpdateGroupsTool(svc);
+
+    await tool.invoke(
+      { input: { filePath: TEST_FILE_PATH, updates: [{ id: 'g1', label: 'Renamed', color: 'red' }] } } as any,
+      mockToken,
+    );
+
+    const ops = vi.mocked(svc.applySemanticOps).mock.calls[0][0];
+    expect(ops[0]).toEqual({ op: 'update_group', id: 'g1', changes: { label: 'Renamed', color: 'red' } });
+    expect(vi.mocked(svc.applySemanticOps).mock.calls[0][1]).toBeDefined();
+  });
+
+  it('returns success message on success', async () => {
+    const svc = makeMockDiagramService();
+    const tool = new UpdateGroupsTool(svc);
+
+    const result = await tool.invoke(
+      { input: { filePath: TEST_FILE_PATH, updates: [{ id: 'g1', label: 'X' }] } } as any,
+      mockToken,
+    );
+
+    expect(resultText(result)).toContain('Updated');
+  });
+
+  it('returns failure message on error', async () => {
+    const svc = makeMockDiagramService({
+      applySemanticOps: vi.fn().mockResolvedValue({ success: false, error: 'Oops' }),
+    });
+    const tool = new UpdateGroupsTool(svc);
+
+    const result = await tool.invoke(
+      { input: { filePath: TEST_FILE_PATH, updates: [{ id: 'g1' }] } } as any,
+      mockToken,
+    );
+
+    expect(resultText(result)).toContain('Failed');
   });
 });
 

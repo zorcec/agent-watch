@@ -1,8 +1,11 @@
 import * as vscode from 'vscode';
 import type { DiagramService } from '../DiagramService';
 import type { NodeShape, NodeColor } from '../types/DiagramDocument';
+import { openDiagramDocument, fileNameFromPath } from './toolHelpers';
 
 interface UpdateNodesInput {
+  /** Absolute path to the .diagram file to modify. */
+  filePath: string;
   updates: {
     id: string;
     label?: string;
@@ -21,8 +24,9 @@ export class UpdateNodesTool implements vscode.LanguageModelTool<UpdateNodesInpu
     _token: vscode.CancellationToken,
   ) {
     const count = options.input.updates.length;
+    const file = fileNameFromPath(options.input.filePath);
     return {
-      invocationMessage: `Updating ${count} node(s)...`,
+      invocationMessage: `Updating ${count} node(s) in ${file}...`,
       confirmationMessages: {
         title: 'Update diagram nodes',
         message: new vscode.MarkdownString(
@@ -36,6 +40,13 @@ export class UpdateNodesTool implements vscode.LanguageModelTool<UpdateNodesInpu
     options: vscode.LanguageModelToolInvocationOptions<UpdateNodesInput>,
     _token: vscode.CancellationToken,
   ): Promise<vscode.LanguageModelToolResult> {
+    const opened = await openDiagramDocument(options.input.filePath);
+    if ('error' in opened) {
+      return new vscode.LanguageModelToolResult([
+        new vscode.LanguageModelTextPart(opened.error),
+      ]);
+    }
+
     const ops = options.input.updates.map((u) => ({
       op: 'update_node' as const,
       id: u.id,
@@ -48,7 +59,7 @@ export class UpdateNodesTool implements vscode.LanguageModelTool<UpdateNodesInpu
       },
     }));
 
-    const result = await this.diagramService.applySemanticOps(ops);
+    const result = await this.diagramService.applySemanticOps(ops, opened.doc);
 
     return new vscode.LanguageModelToolResult([
       new vscode.LanguageModelTextPart(

@@ -26,14 +26,31 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('diagramflow.exportMermaid', () => {
       vscode.commands.executeCommand('diagramflow.internal.export', 'mermaid');
     }),
+    vscode.commands.registerCommand('diagramflow.sortNodes', () => {
+      // If no activeDocument (e.g. panel lost focus), try finding any open .diagram file.
+      if (!diagramService.getActiveDocument()) {
+        const fallback = vscode.workspace.textDocuments.find(
+          (d) => d.fileName.endsWith('.diagram') && !d.isClosed,
+        );
+        if (fallback) {
+          diagramService.setActiveDocument(fallback);
+        }
+      }
+      diagramService.sortNodes();
+    }),
     vscode.commands.registerCommand('diagramflow.autoLayout', () => {
+      if (!diagramService.getActiveDocument()) {
+        const fallback = vscode.workspace.textDocuments.find(
+          (d) => d.fileName.endsWith('.diagram') && !d.isClosed,
+        );
+        if (fallback) {
+          diagramService.setActiveDocument(fallback);
+        }
+      }
       diagramService.autoLayoutAll();
     }),
     vscode.commands.registerCommand('diagramflow.autoLayoutForce', () => {
       diagramService.autoLayoutForce();
-    }),
-    vscode.commands.registerCommand('diagramflow.sortNodes', () => {
-      diagramService.sortNodes();
     }),
     vscode.commands.registerCommand('diagramflow.undo', () => {
       diagramService.undo();

@@ -10,7 +10,7 @@ import {
   type NodeColor,
 } from '../../types/DiagramDocument';
 
-export interface DiagramNodeData {
+export interface DiagramNodeData extends Record<string, unknown> {
   label: string;
   shape: DocNode['shape'];
   color: DocNode['color'];
@@ -20,12 +20,12 @@ export interface DiagramNodeData {
   height: number;
 }
 
-export interface DiagramEdgeData {
+export interface DiagramEdgeData extends Record<string, unknown> {
   style: 'solid' | 'dashed' | 'dotted';
   arrow: 'normal' | 'arrow' | 'open' | 'none';
 }
 
-export interface DiagramGroupNodeData {
+export interface DiagramGroupNodeData extends Record<string, unknown> {
   label: string;
   color?: NodeColor;
   collapsed?: boolean;
