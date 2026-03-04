@@ -31,6 +31,15 @@ export type WebviewMessage =
     }
   | { type: 'DELETE_NODES'; nodeIds: string[] }
   | {
+      /** G4: Duplicate a node at (x, y); restore original to (originalX, originalY). */
+      type: 'DUPLICATE_NODE';
+      id: string;
+      x: number;
+      y: number;
+      originalX: number;
+      originalY: number;
+    }
+  | {
       type: 'ADD_GROUP';
       label: string;
     }

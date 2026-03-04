@@ -413,3 +413,83 @@ describe('applySemanticOps — sort_nodes skips partial layout', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// G4: duplicateNode
+// ---------------------------------------------------------------------------
+describe('DiagramService.duplicateNode', () => {
+  let service: DiagramService;
+
+  function makeDocWithNode(): { doc: DiagramDocument; textDoc: ReturnType<typeof makeMockTextDocument> } {
+    const doc: DiagramDocument = {
+      meta: { version: '1.0', title: 'T', created: '', modified: '' },
+      nodes: [{ id: 'n1', label: 'Original', shape: 'rectangle', color: 'blue', x: 10, y: 20, width: 120, height: 60 }],
+      edges: [],
+      groups: [],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    };
+    return { doc, textDoc: makeMockTextDocument(JSON.stringify(doc)) };
+  }
+
+  beforeEach(() => {
+    service = new DiagramService();
+    vi.clearAllMocks();
+  });
+
+  it('does nothing when node id is not found', async () => {
+    const { textDoc } = makeDocWithNode();
+    service.setActiveDocument(textDoc);
+    const writeSpy = vi.spyOn(nodeFs, 'writeFileSync');
+    await service.duplicateNode('unknown', 50, 60, 10, 20);
+    expect(writeSpy).not.toHaveBeenCalled();
+  });
+
+  it('creates a copy at the new position', async () => {
+    const { textDoc } = makeDocWithNode();
+    service.setActiveDocument(textDoc);
+
+    let written: DiagramDocument | null = null;
+    vi.spyOn(nodeFs, 'writeFileSync').mockImplementation((_path, content) => {
+      written = JSON.parse(content as string) as DiagramDocument;
+    });
+
+    await service.duplicateNode('n1', 100, 200, 10, 20);
+
+    expect(written).not.toBeNull();
+    const nodes = written!.nodes;
+    expect(nodes).toHaveLength(2);
+
+    // Original restored to pre-drag position.
+    const original = nodes.find((n: { id: string }) => n.id === 'n1');
+    expect(original!.x).toBe(10);
+    expect(original!.y).toBe(20);
+
+    // Duplicate is at drop position with a new id.
+    const duplicate = nodes.find((n: { id: string }) => n.id !== 'n1');
+    expect(duplicate).toBeDefined();
+    expect(duplicate!.x).toBe(100);
+    expect(duplicate!.y).toBe(200);
+    expect(duplicate!.label).toBe('Original');
+    expect(duplicate!.color).toBe('blue');
+    expect(duplicate!.pinned).toBe(true);
+    expect(duplicate!.id).not.toBe('n1');
+  });
+
+  it('pushes current state to undo stack', async () => {
+    const { textDoc } = makeDocWithNode();
+    service.setActiveDocument(textDoc);
+
+    vi.spyOn(nodeFs, 'writeFileSync').mockImplementation(() => {});
+
+    await service.duplicateNode('n1', 100, 200, 10, 20);
+    // Undo should be possible.
+    let undone: DiagramDocument | null = null;
+    vi.spyOn(nodeFs, 'writeFileSync').mockImplementation((_path, content) => {
+      undone = JSON.parse(content as string) as DiagramDocument;
+    });
+    await service.undo(textDoc);
+    expect(undone).not.toBeNull();
+    // After undo, the document should be back to 1 node.
+    expect((undone as unknown as DiagramDocument).nodes).toHaveLength(1);
+  });
+});
+

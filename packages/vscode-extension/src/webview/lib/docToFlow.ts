@@ -38,6 +38,8 @@ export interface DiagramEdgeData extends Record<string, unknown> {
   bidirectional?: boolean;
   protocol?: string;
   dataTypes?: string[];
+  /** Injected by CanvasPanel — not persisted in the document. */
+  onLabelChange?: (id: string, label: string) => void;
 }
 
 export interface DiagramGroupNodeData extends Record<string, unknown> {

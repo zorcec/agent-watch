@@ -9,7 +9,7 @@ import {
   ConnectionMode,
   useReactFlow,
 } from '@xyflow/react';
-import type { Node as RFNode } from '@xyflow/react';
+import type { Node as RFNode, Edge as RFEdge } from '@xyflow/react';
 import { DiagramNode } from './DiagramNode';
 import { DiagramEdge } from './DiagramEdge';
 import { DiagramGroupNode } from './DiagramGroupNode';
@@ -20,7 +20,12 @@ import { PropertiesPanel } from './PropertiesPanel';
 import { SearchBar } from './SearchBar';
 import { ShortcutsPanel } from './ShortcutsPanel';
 import { PanningHint } from './PanningHint';
+import { NoteColorPicker } from './NoteColorPicker';
+import { ContextMenu, type ContextMenuItem } from './ContextMenu';
+import { ImageInputPanel } from './ImageInputPanel';
 import type { GraphState } from '../hooks/useGraphState';
+import type { NodeColor } from '../../types/DiagramDocument';
+import type { DiagramEdgeData } from '../lib/docToFlow';
 
 const nodeTypes = {
   diagramNode: DiagramNode,
@@ -50,6 +55,14 @@ function CanvasPanelInner({ graph }: CanvasPanelProps) {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [toolboxMode, setToolboxMode] = useState<ToolboxMode>(null);
   const pendingImageDataRef = useRef<{ src: string; description?: string } | null>(null);
+  // G3: Note color selected before placement
+  const [pendingNoteColor, setPendingNoteColor] = useState<NodeColor>('yellow');
+  // G9: Show ImageInputPanel instead of window.prompt
+  const [showImagePanel, setShowImagePanel] = useState(false);
+  // G5/G6: Context menu state
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: ContextMenuItem[] } | null>(null);
+  // G4: Alt+drag to duplicate — track original position before drag
+  const altDragOriginalPosRef = useRef<{ id: string; x: number; y: number } | null>(null);
 
   // Fit view whenever a layout request completes.
   useEffect(() => {
@@ -63,18 +76,31 @@ function CanvasPanelInner({ graph }: CanvasPanelProps) {
     }
   }, [graph.layoutPending, fitView, graph.onFitViewDone]);
 
-  // Handle toolbox mode changes — when image tool is selected, prompt for URL immediately.
+  // Handle toolbox mode changes — G9: image tool shows inline panel instead of window.prompt.
   const handleSetToolboxMode = useCallback((mode: ToolboxMode) => {
     if (mode === 'image') {
-      const src = window.prompt('Image URL or data URI:');
-      if (!src?.trim()) return;
-      const description = window.prompt('Description (optional):') ?? undefined;
-      pendingImageDataRef.current = { src: src.trim(), description: description?.trim() || undefined };
+      pendingImageDataRef.current = null;
       setToolboxMode('image');
+      setShowImagePanel(true);
     } else {
       pendingImageDataRef.current = null;
+      setShowImagePanel(false);
       setToolboxMode(mode);
     }
+  }, []);
+
+  // G9: Confirmed from ImageInputPanel.
+  const handleImageInputConfirm = useCallback((src: string, description?: string) => {
+    pendingImageDataRef.current = { src, description };
+    setShowImagePanel(false);
+    // Keep toolboxMode = 'image' so the next canvas click places the image.
+  }, []);
+
+  // G9: Cancelled from ImageInputPanel.
+  const handleImageInputCancel = useCallback(() => {
+    setShowImagePanel(false);
+    pendingImageDataRef.current = null;
+    setToolboxMode(null);
   }, []);
 
   // Place an element when clicking on empty canvas area while a tool is selected.
@@ -87,7 +113,8 @@ function CanvasPanelInner({ graph }: CanvasPanelProps) {
           graph.onAddNodeAt(position.x, position.y);
           break;
         case 'note':
-          graph.onAddNoteAt(position.x, position.y);
+          // G3: Use the color selected in NoteColorPicker.
+          graph.onAddNoteAt(position.x, position.y, pendingNoteColor);
           break;
         case 'text':
           graph.onAddTextAt(position.x, position.y);
@@ -106,12 +133,168 @@ function CanvasPanelInner({ graph }: CanvasPanelProps) {
       setToolboxMode(null);
       pendingImageDataRef.current = null;
     },
+    [toolboxMode, screenToFlowPosition, graph, pendingNoteColor],
+  );
+
+  // G7: Double-click empty canvas → add text element immediately in edit mode.
+  const handlePaneDoubleClick = useCallback(
+    (event: React.MouseEvent) => {
+      // Only trigger clicks directly on the ReactFlow pane (not on nodes/edges).
+      const target = event.target as HTMLElement;
+      if (!target.classList.contains('react-flow__pane')) return;
+      // Only trigger when no placement tool is active.
+      if (toolboxMode && toolboxMode !== 'hand') return;
+      const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      graph.onAddTextAt(position.x, position.y);
+    },
     [toolboxMode, screenToFlowPosition, graph],
   );
 
-  // When tool is active and user clicks a node: if it's a group, place inside; otherwise select and cancel.
+  // G5: Right-click on node → context menu.
+  const handleNodeContextMenu = useCallback(
+    (event: React.MouseEvent, node: RFNode) => {
+      event.preventDefault();
+      setContextMenu(null); // Close any existing menu.
+
+      const isGroupNode = node.type === 'diagramGroup';
+
+      const items: ContextMenuItem[] = [
+        {
+          label: 'Edit label',
+          icon: '✏️',
+          action: () => {
+            // Trigger label edit — fire double-click-equivalent via node toolbar.
+            // PostMessage is needed; use the label change with current label as prompt.
+            const current = isGroupNode
+              ? graph.groups.find((g) => g.id === node.id)?.label ?? 'Group'
+              : (node.data.label as string) ?? '';
+            const next = window.prompt('Edit label:', current);
+            if (next !== null && next.trim() !== current) {
+              if (isGroupNode) {
+                graph.onUpdateGroupProps(node.id, { label: next.trim() });
+              } else {
+                graph.onNodeLabelChange(node.id, next.trim());
+              }
+            }
+          },
+        },
+        {
+          label: 'Duplicate',
+          icon: '📄',
+          action: () => {
+            graph.onDuplicateNodeAt(
+              node.id,
+              Math.round(node.position.x + 40),
+              Math.round(node.position.y + 40),
+              Math.round(node.position.x),
+              Math.round(node.position.y),
+            );
+          },
+        },
+        { label: '', separator: true, action: () => {} },
+        {
+          label: 'Delete',
+          icon: '🗑️',
+          danger: true,
+          action: () => {
+            graph.onNodesDelete([node]);
+          },
+        },
+      ];
+
+      if (!isGroupNode && node.parentId) {
+        items.splice(items.length - 1, 0, {
+          label: 'Remove from group',
+          icon: '⬡',
+          action: () => graph.onRemoveFromGroup(node.id),
+        });
+      }
+
+      setContextMenu({ x: event.clientX, y: event.clientY, items });
+    },
+    [graph],
+  );
+
+  // G6: Right-click on edge → context menu.
+  const handleEdgeContextMenu = useCallback(
+    (event: React.MouseEvent, edge: RFEdge) => {
+      event.preventDefault();
+      setContextMenu(null);
+
+      const currentStyle = (edge.data as { style?: string } | undefined)?.style ?? 'solid';
+      const nextStyle = currentStyle === 'solid' ? 'dashed' : currentStyle === 'dashed' ? 'dotted' : 'solid';
+
+      const items: ContextMenuItem[] = [
+        {
+          label: 'Edit label',
+          icon: '✏️',
+          action: () => {
+            const currentLabel = typeof edge.label === 'string' ? edge.label : '';
+            const next = window.prompt('Edge label:', currentLabel);
+            if (next !== null) {
+              graph.onUpdateEdgeProps(edge.id, { label: next.trim() });
+            }
+          },
+        },
+        {
+          label: `Style: → ${nextStyle}`,
+          icon: '〰️',
+          action: () => {
+            graph.onUpdateEdgeProps(edge.id, { style: nextStyle as 'solid' | 'dashed' | 'dotted' });
+          },
+        },
+        { label: '', separator: true, action: () => {} },
+        {
+          label: 'Delete',
+          icon: '🗑️',
+          danger: true,
+          action: () => {
+            graph.onEdgesDelete([edge]);
+          },
+        },
+      ];
+
+      setContextMenu({ x: event.clientX, y: event.clientY, items });
+    },
+    [graph],
+  );
+
+  // G4: Alt+drag to duplicate. Track original position at drag start.
+  const handleNodeDragStart = useCallback(
+    (_event: React.MouseEvent, node: RFNode) => {
+      if (_event.altKey && node.type === 'diagramNode') {
+        altDragOriginalPosRef.current = { id: node.id, x: node.position.x, y: node.position.y };
+      } else {
+        altDragOriginalPosRef.current = null;
+      }
+    },
+    [],
+  );
+
+  // G4: On drag stop, if Alt was held: duplicate node at drop position, restore original.
+  const handleNodeDragStop = useCallback(
+    (_event: React.MouseEvent, node: RFNode, nodes: RFNode[]) => {
+      const origData = altDragOriginalPosRef.current;
+      if (origData && origData.id === node.id && node.type === 'diagramNode') {
+        altDragOriginalPosRef.current = null;
+        graph.onDuplicateNodeAt(
+          node.id,
+          Math.round(node.position.x),
+          Math.round(node.position.y),
+          Math.round(origData.x),
+          Math.round(origData.y),
+        );
+        return; // Extension host restores the original position for us.
+      }
+      graph.onNodeDragStop(_event, node, nodes);
+    },
+    [graph],
+  );
   const handleNodeClick = useCallback(
     (_event: React.MouseEvent, node: RFNode) => {
+      // Close context menu on any click.
+      setContextMenu(null);
+
       if (!toolboxMode || toolboxMode === 'hand') return;
       if (node.type === 'diagramGroup') {
         const position = screenToFlowPosition({ x: _event.clientX, y: _event.clientY });
@@ -120,7 +303,8 @@ function CanvasPanelInner({ graph }: CanvasPanelProps) {
             graph.onAddNodeAt(position.x, position.y, node.id);
             break;
           case 'note':
-            graph.onAddNoteAt(position.x, position.y);
+            // G3: Use selected note color.
+            graph.onAddNoteAt(position.x, position.y, pendingNoteColor);
             break;
           case 'text':
             graph.onAddTextAt(position.x, position.y);
@@ -143,7 +327,7 @@ function CanvasPanelInner({ graph }: CanvasPanelProps) {
         pendingImageDataRef.current = null;
       }
     },
-    [toolboxMode, screenToFlowPosition, graph],
+    [toolboxMode, screenToFlowPosition, graph, pendingNoteColor],
   );
 
   const handleKeyDown = useCallback(
@@ -272,6 +456,16 @@ function CanvasPanelInner({ graph }: CanvasPanelProps) {
     [graph.allNodes, graph.onNodeLabelChange, graph.onUnpinNode, graph.onRemoveFromGroup, graph.onToggleGroupCollapse, graph.onTextContentChange, highlightedNodeIds],
   );
 
+  // G2: Inject onLabelChange into every edge so DiagramEdge can dispatch label edits.
+  const edgesWithCallbacks = useMemo(
+    () =>
+      graph.edges.map((edge) => ({
+        ...edge,
+        data: { ...edge.data, onLabelChange: graph.onEdgeLabelChange },
+      } as RFEdge<DiagramEdgeData>)),
+    [graph.edges, graph.onEdgeLabelChange],
+  );
+
   // Determine what the PropertiesPanel should display.
   const propertiesPanelInput = useMemo(() => {
     if (graph.selectedGroupId) {
@@ -368,22 +562,25 @@ function CanvasPanelInner({ graph }: CanvasPanelProps) {
         />
       )}
 
-      <div className="canvas-main" data-testid="canvas-main">
+      <div className="canvas-main" data-testid="canvas-main" onDoubleClick={handlePaneDoubleClick}>
         <ReactFlow
           nodes={nodesWithCallbacks}
-          edges={graph.edges}
+          edges={edgesWithCallbacks}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           onNodesChange={graph.onNodesChange}
           onEdgesChange={graph.onEdgesChange}
           onConnect={graph.onConnect}
           onReconnect={graph.onReconnect}
-          onNodeDragStop={graph.onNodeDragStop}
+          onNodeDragStart={handleNodeDragStart}
+          onNodeDragStop={handleNodeDragStop}
           onNodesDelete={graph.onNodesDelete}
           onEdgesDelete={graph.onEdgesDelete}
           onSelectionChange={graph.onSelectionChange}
           onPaneClick={handlePaneClick}
           onNodeClick={handleNodeClick}
+          onNodeContextMenu={handleNodeContextMenu}
+          onEdgeContextMenu={handleEdgeContextMenu}
           connectionMode={ConnectionMode.Loose}
           fitView
           defaultEdgeOptions={{ type: 'diagramEdge' }}
@@ -398,6 +595,14 @@ function CanvasPanelInner({ graph }: CanvasPanelProps) {
         >
           <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
           <Toolbar {...toolbarProps} />
+          {/* G3: Color picker shown when note tool is active. */}
+          {toolboxMode === 'note' && (
+            <NoteColorPicker selectedColor={pendingNoteColor} onSelect={setPendingNoteColor} />
+          )}
+          {/* G9: Image URL input panel. */}
+          {showImagePanel && (
+            <ImageInputPanel onConfirm={handleImageInputConfirm} onCancel={handleImageInputCancel} />
+          )}
           <MiniMap
             nodeColor={(n) =>
               MINIMAP_NODE_COLORS[n.data?.color as string] ?? '#555'
@@ -437,6 +642,15 @@ function CanvasPanelInner({ graph }: CanvasPanelProps) {
         </ReactFlow>
 
         <PropertiesPanel {...propertiesPanelInput} />
+        {/* G5/G6: Right-click context menu for nodes and edges. */}
+        {contextMenu && (
+          <ContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            items={contextMenu.items}
+            onClose={() => setContextMenu(null)}
+          />
+        )}
       </div>
 
       <PanningHint />

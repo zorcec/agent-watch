@@ -127,6 +127,13 @@ export class DiagramEditorProvider implements vscode.CustomTextEditorProvider {
         );
         break;
 
+      case 'DUPLICATE_NODE':
+        // G4: Alt+drag duplicate — clone node at drop position, restore original.
+        await this.diagramService.duplicateNode(
+          msg.id, msg.x, msg.y, msg.originalX, msg.originalY, document,
+        );
+        break;
+
       case 'ADD_NODES':
         await this.diagramService.applySemanticOps(
           msg.nodes.map((n) => ({ op: 'add_node' as const, node: n as any })),

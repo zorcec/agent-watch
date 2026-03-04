@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useState, useCallback } from 'react';
 import { BaseEdge, getSmoothStepPath, EdgeLabelRenderer, Position, useInternalNode } from '@xyflow/react';
 import type { EdgeProps, InternalNode } from '@xyflow/react';
 import type { DiagramEdgeData } from '../lib/docToFlow';
@@ -96,6 +96,41 @@ export const DiagramEdge = memo(
     const sourceNode = useInternalNode(source);
     const targetNode = useInternalNode(target);
 
+    // Inline label editing state — Miro-style double-click on edge to add/edit label.
+    const [editingLabel, setEditingLabel] = useState(false);
+    const [labelDraft, setLabelDraft] = useState('');
+
+    const startLabelEdit = useCallback(
+      (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setLabelDraft(typeof label === 'string' ? label : '');
+        setEditingLabel(true);
+      },
+      [label],
+    );
+
+    const commitLabel = useCallback(() => {
+      setEditingLabel(false);
+      const next = labelDraft.trim();
+      // Only dispatch if the label actually changed.
+      if (next !== (typeof label === 'string' ? label : '')) {
+        data?.onLabelChange?.(id, next);
+      }
+    }, [labelDraft, label, data, id]);
+
+    const handleInputKeyDown = useCallback(
+      (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          commitLabel();
+        }
+        if (e.key === 'Escape') {
+          setEditingLabel(false);
+        }
+      },
+      [commitLabel],
+    );
+
     // Prefer dynamically computed floating handles; fall back to ReactFlow defaults
     const floating = computeFloatingHandles(sourceNode, targetNode);
 
@@ -116,6 +151,8 @@ export const DiagramEdge = memo(
     const markerEnd = hasArrow ? 'url(#diagramflow-arrow)' : undefined;
     const markerStart = (hasArrow && isBidirectional) ? 'url(#diagramflow-arrow-start)' : undefined;
 
+    const showLabel = !!(label || editingLabel);
+
     return (
       <>
         <BaseEdge
@@ -129,19 +166,45 @@ export const DiagramEdge = memo(
           markerEnd={markerEnd}
           markerStart={markerStart}
         />
-        {label && (
+
+        {/* Invisible wide hit area — Miro behavior: double-click anywhere on edge to edit label. */}
+        <path
+          d={edgePath}
+          fill="none"
+          strokeWidth={16}
+          stroke="transparent"
+          className="react-flow__edge-interaction"
+          style={{ cursor: 'pointer' }}
+          onDoubleClick={startLabelEdit}
+        />
+
+        {showLabel && (
           <EdgeLabelRenderer>
             <div
               className="edge-label nodrag nopan"
               style={{
                 position: 'absolute',
                 transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
-                pointerEvents: 'none',
                 zIndex: 10,
+                pointerEvents: editingLabel ? 'all' : 'none',
               }}
               data-testid={`edge-label-${id}`}
+              onDoubleClick={startLabelEdit}
             >
-              {label}
+              {editingLabel ? (
+                <input
+                  className="edge-label-input"
+                  value={labelDraft}
+                  autoFocus
+                  placeholder="Edge label…"
+                  onChange={(e) => setLabelDraft(e.target.value)}
+                  onBlur={commitLabel}
+                  onKeyDown={handleInputKeyDown}
+                  data-testid={`edge-label-input-${id}`}
+                />
+              ) : (
+                <span>{label}</span>
+              )}
             </div>
           </EdgeLabelRenderer>
         )}
@@ -151,3 +214,4 @@ export const DiagramEdge = memo(
 );
 
 DiagramEdge.displayName = 'DiagramEdge';
+

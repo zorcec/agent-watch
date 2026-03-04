@@ -255,6 +255,40 @@ export class DiagramService {
   }
 
   /**
+   * G4: Duplicates a node at the given drop position (x, y) and restores the
+   * original node to its pre-drag position (originalX, originalY).
+   * The new node is a deep copy of the original with a fresh nanoid.
+   */
+  async duplicateNode(
+    id: string,
+    x: number,
+    y: number,
+    originalX: number,
+    originalY: number,
+    doc?: vscode.TextDocument,
+  ): Promise<void> {
+    const state = this.resolveDocument(doc);
+    if (!state) return;
+    const { target, current } = state;
+
+    const modified = structuredClone(current);
+    const original = modified.nodes.find((n) => n.id === id);
+    if (!original) return;
+
+    // Restore original node to its pre-drag position.
+    original.x = originalX;
+    original.y = originalY;
+
+    // Create duplicate at the drop position with a new id.
+    const { id: _id, ...rest } = original;
+    modified.nodes.push({ ...rest, id: nanoid(), x, y, pinned: true });
+
+    this.recordHistory(current);
+    this.stampModified(modified);
+    await writeDocumentToFile(target, modified);
+  }
+
+  /**
    * Moves a group node and all its child nodes by the displacement from the
    * group's old computed position to the given new position.
    */

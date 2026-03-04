@@ -1066,3 +1066,229 @@ body {
   background: var(--vscode-list-hoverBackground, #444);
   color: var(--vscode-editor-foreground, #ccc);
 }
+
+/* -------------------------------------------------------------------------
+   G3 – Note color picker (shown when note tool is active)
+   ---------------------------------------------------------------------- */
+
+.note-color-picker {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--vscode-editorWidget-background, #2d2d2d);
+  border: 1px solid var(--vscode-editorWidget-border, #444);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  font-family: var(--vscode-font-family, sans-serif);
+  font-size: 12px;
+  color: var(--vscode-foreground, #ccc);
+}
+
+.note-color-picker__label,
+.note-color-picker__hint {
+  white-space: nowrap;
+  color: var(--vscode-descriptionForeground, #aaa);
+  font-size: 11px;
+}
+
+.note-color-picker__swatches {
+  display: flex;
+  gap: 5px;
+}
+
+.note-color-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.1s, border-color 0.1s;
+}
+
+.note-color-swatch:hover {
+  transform: scale(1.15);
+}
+
+.note-color-swatch--selected,
+.note-color-swatch--active {
+  border-color: var(--vscode-focusBorder, #007fd4);
+  transform: scale(1.1);
+}
+
+/* -------------------------------------------------------------------------
+   G5/G6 – Context menu (right-click on node / edge)
+   ---------------------------------------------------------------------- */
+
+.context-menu {
+  position: fixed;
+  z-index: 9999;
+  min-width: 160px;
+  background: var(--vscode-menu-background, #2d2d2d);
+  border: 1px solid var(--vscode-menu-border, #444);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  padding: 4px 0;
+  font-family: var(--vscode-font-family, sans-serif);
+  font-size: 13px;
+}
+
+.context-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  cursor: pointer;
+  color: var(--vscode-menu-foreground, #ccc);
+  user-select: none;
+  white-space: nowrap;
+}
+
+.context-menu__item:hover {
+  background: var(--vscode-menu-selectionBackground, #094771);
+  color: var(--vscode-menu-selectionForeground, #fff);
+}
+
+.context-menu__item--danger {
+  color: var(--vscode-errorForeground, #f48771);
+}
+
+.context-menu__item--danger:hover {
+  background: var(--vscode-inputValidation-errorBackground, #5a1d1d);
+  color: var(--vscode-errorForeground, #f48771);
+}
+
+.context-menu__separator {
+  height: 1px;
+  background: var(--vscode-menu-separatorBackground, #444);
+  margin: 4px 0;
+}
+
+/* -------------------------------------------------------------------------
+   G9 – Image input panel (replaces window.prompt)
+   ---------------------------------------------------------------------- */
+
+.image-input-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  min-width: 320px;
+  background: var(--vscode-editorWidget-background, #2d2d2d);
+  border: 1px solid var(--vscode-editorWidget-border, #444);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  font-family: var(--vscode-font-family, sans-serif);
+}
+
+.image-input-panel__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.image-input-panel__close {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--vscode-descriptionForeground, #aaa);
+  font-size: 14px;
+  padding: 2px 5px;
+  border-radius: 3px;
+  line-height: 1;
+}
+
+.image-input-panel__close:hover {
+  background: var(--vscode-list-hoverBackground, #444);
+  color: var(--vscode-editor-foreground, #ccc);
+}
+
+.image-input-panel__form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.image-input-panel__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground, #aaa);
+}
+
+.image-input-panel__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--vscode-editor-foreground, #ccc);
+  margin: 0 0 4px;
+}
+
+.image-input-panel__input {
+  background: var(--vscode-input-background, #333);
+  color: var(--vscode-input-foreground, #ccc);
+  border: 1px solid var(--vscode-input-border, #555);
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.image-input-panel__input:focus {
+  border-color: var(--vscode-focusBorder, #007fd4);
+}
+
+.image-input-panel__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.image-input-panel__btn {
+  padding: 5px 14px;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.image-input-panel__btn--primary {
+  background: var(--vscode-button-background, #0e639c);
+  color: var(--vscode-button-foreground, #fff);
+}
+
+.image-input-panel__btn--primary:hover {
+  background: var(--vscode-button-hoverBackground, #1177bb);
+}
+
+.image-input-panel__btn--secondary {
+  background: var(--vscode-button-secondaryBackground, #444);
+  color: var(--vscode-button-secondaryForeground, #ccc);
+}
+
+.image-input-panel__btn--secondary:hover {
+  background: var(--vscode-button-secondaryHoverBackground, #555);
+}
+
+/* -------------------------------------------------------------------------
+   G2 – Edge label inline editing
+   ---------------------------------------------------------------------- */
+
+.edge-label-input {
+  background: var(--vscode-input-background, #333);
+  color: var(--vscode-input-foreground, #ccc);
+  border: 1px solid var(--vscode-focusBorder, #007fd4);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-family: var(--vscode-font-family, sans-serif);
+  text-align: center;
+  min-width: 60px;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(0, 127, 212, 0.3);
+}

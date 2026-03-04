@@ -64,13 +64,15 @@ export interface GraphState {
   onAddNode: () => void;
   onAddNodeAt: (x: number, y: number, group?: string) => void;
   onAddNote: () => void;
-  onAddNoteAt: (x: number, y: number) => void;
+  onAddNoteAt: (x: number, y: number, color?: NodeColor) => void;
   onAddGroup: () => void;
   onAddText: () => void;
   onAddTextAt: (x: number, y: number) => void;
   onAddImage: (src: string, description?: string) => void;
   onAddImageAt: (x: number, y: number, src: string, description?: string) => void;
   onNodeLabelChange: (id: string, label: string) => void;
+  onEdgeLabelChange: (id: string, label: string) => void;
+  onDuplicateNodeAt: (id: string, x: number, y: number, originalX: number, originalY: number) => void;
   onTextContentChange: (nodeId: string, content: string) => void;
   onUnpinNode: (id: string) => void;
   onRemoveFromGroup: (id: string) => void;
@@ -372,10 +374,10 @@ export function useGraphState(
   }, [bridge]);
 
   const onAddNoteAt = useCallback(
-    (x: number, y: number) => {
+    (x: number, y: number, color: NodeColor = 'yellow') => {
       bridge.postMessage({
         type: 'ADD_NODE',
-        node: { label: 'Note', shape: 'note', color: 'yellow', x, y, pinned: true },
+        node: { label: 'Note', shape: 'note', color, x, y, pinned: true },
       });
     },
     [bridge],
@@ -592,6 +594,20 @@ export function useGraphState(
     setLayoutPending(false);
   }, []);
 
+  const onEdgeLabelChange = useCallback(
+    (id: string, label: string) => {
+      bridge.postMessage({ type: 'UPDATE_EDGE_PROPS', id, changes: { label } });
+    },
+    [bridge],
+  );
+
+  const onDuplicateNodeAt = useCallback(
+    (id: string, x: number, y: number, originalX: number, originalY: number) => {
+      bridge.postMessage({ type: 'DUPLICATE_NODE', id, x, y, originalX, originalY });
+    },
+    [bridge],
+  );
+
   const onViewMetadata = useCallback(() => {
     bridge.postMessage({ type: 'VIEW_METADATA' });
   }, [bridge]);
@@ -628,6 +644,8 @@ export function useGraphState(
     onAddImage,
     onAddImageAt,
     onNodeLabelChange,
+    onEdgeLabelChange,
+    onDuplicateNodeAt,
     onTextContentChange,
     onUnpinNode,
     onRemoveFromGroup,
